@@ -5,12 +5,13 @@
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
+#include <jack/transport.h>
 #include <iostream>
 #include <cassert>
+#include <cmath>
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+//#include <unistd.h>
 
 using namespace std;
 
@@ -30,6 +31,10 @@ private:
     jack_client_t* m_client;
     jack_port_t* m_port;
     bool m_good;
+
+    // Cached calculations
+    jack_nframes_t m_accum;     // Frame of last clock in last process()
+
 };
 
 #define CLIENT_FAILURE(msg) {						\
@@ -52,7 +57,8 @@ private:
 JackMidiClock::JackMidiClock(void) :
     m_client(0),
     m_port(0),
-    m_good(true)
+    m_good(true),
+    m_accum(0)
 {
     jack_client_t* client;
     jack_port_t* port;
@@ -170,22 +176,73 @@ JackMidiClock::~JackMidiClock(void)
     return;
 }
 
+/*
+ * MIDI Clock is expected to send 24 pulses per beat.  A pulse
+ * is sending a midi message: 'F8'
+ *
+ * This process callback will:
+ *
+ * o Send 0xF8 24 times per quarter note, sync'd to the beat, if the
+ *   transport is rolling and the transport master is supplying BBT
+ *   information.
+ *
+ * FUTURE PLANS:
+ *
+ * o Possibly continue sending pulses even when xport stopeed.
+ *
+ * o Have a default tempo that is sent out even if there is
+ *   no transport master giving BBT info.
+ *
+ */
 int JackMidiClock::process(jack_nframes_t nframes)
 {
-    int i,j;
+    // See this->m_accum for state variable
+    jack_position_t xpos;
+    jack_transport_state_t xstate = jack_transport_query(m_client, &xpos);
     void* port_buf = jack_port_get_buffer(m_port, nframes);
     unsigned char* buffer;
     jack_midi_clear_buffer(port_buf);
-    static bool toggle = false;
 
-    if(toggle) {
-	buffer = jack_midi_event_reserve(port_buf, 0, 1);
-	buffer[0] = 0xF8;  // MIDI Clock Pulse
-	toggle = false;
-    } else {
-	toggle = true;
+    if( (xstate == JackTransportRolling)
+	&& (xpos.valid | JackPositionBBT) ) {
+
+	// Frame interval of 24 clocks per quarter note.
+	double frames_per_beat =
+	    double(xpos.frame_rate)
+	    * 60.0
+	    / xpos.beats_per_minute;
+
+	double _interval =
+	    frames_per_beat
+	    * xpos.beat_type
+	    / 4.0
+	    / 24.0;
+
+	jack_nframes_t interval = jack_nframes_t(round(_interval));
+	jack_nframes_t fr = 0;
+
+// 	cout << " frame = " << (xpos.frame)
+// 	     << " m_accum = " << (m_accum)
+// 	     << " interval = " << (interval)
+// 	     << " nframes = " << (nframes)
+// 	     << endl;
+	if( interval > nframes + m_accum ) {
+	    m_accum += nframes;
+	} else {
+	    fr = interval - m_accum;
+	    while( fr < nframes ) {
+		assert(fr < nframes);
+		buffer = jack_midi_event_reserve(port_buf, fr, 1);
+		if(buffer != 0) {
+		    buffer[0] = 0xF8;  // MIDI Clock Pulse
+		} else {
+		    cout << "BUFFER RETURNED 0" << endl;
+		}
+		fr += interval;
+	    }
+	    m_accum = nframes - (fr - interval);
+	}
     }
-
     return 0;
 }
 
