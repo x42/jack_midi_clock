@@ -27,12 +27,13 @@ FEATURE REQUESTS
    o In process(), interval is calculated as a floating-point type and
      then rounded to an integer.  This will result in steady-state
      drifting.  Would be better if we dithered the rounding.
-     STATUS: TO-DO
+     STATUS: No.  See next.
      (8/1/09, gabe)
 
    o Right now, the clock pulses are free-rolling and do not
      necessarily snap to any beat.  Would be nice if they did.
-     STATUS: Thinking about it.  Would this overhaul the math model?
+     Note that this removes the need for dithering.
+     STATUS: TO-DO
      (8/1/09, gabe)
 
    o Implement MIDI Time Clock (MTC).  Requested by Julien Claassen
