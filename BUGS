@@ -2,8 +2,40 @@ Jack Midi Clock - MIDI Clock Source and JACK Transport Slave
 Copyright (C) 2009 by Gabriel M. Beddingfield
 All Rights Reserved
 
-THIS IS A HEADING
-=================
+KNOWN BUGS
+==========
 
    o No bugs to report.  Just this template.
      (2/20/09, gabe)
+
+FEATURE REQUESTS
+================
+
+   o Implement START/STOP/CONTINUE/LOCATE.  This is needed for
+     completeness, and was also requested by Julien Claassen
+     <julien@c-lab.de> on the LAU.
+     STATUS: TO-DO
+     (8/1/09, gabe)
+
+   o When the JACK Transport stops, so do the MIDI Clock pulses.
+     Would be nice if there was a feature to keep the pulses coming
+     even if the transport is stopped.  (Use case: only using the JACK
+     transport for its TEMPO information, like for the MS2000(R)).
+     STATUS: TO-DO
+     (8/1/09, gabe)
+
+   o In process(), interval is calculated as a floating-point type and
+     then rounded to an integer.  This will result in steady-state
+     drifting.  Would be better if we dithered the rounding.
+     STATUS: TO-DO
+     (8/1/09, gabe)
+
+   o Right now, the clock pulses are free-rolling and do not
+     necessarily snap to any beat.  Would be nice if they did.
+     STATUS: Thinking about it.  Would this overhaul the math model?
+     (8/1/09, gabe)
+
+   o Implement MIDI Time Clock (MTC).  Requested by Julien Claassen
+     <julien@c-lab.de> (and possibly others) on the LAU.
+     STATUS: Thinking about it.
+     (8/1/09, gabe)
