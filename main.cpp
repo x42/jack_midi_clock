@@ -16,6 +16,7 @@
 using namespace std;
 
 #define APPNAME "Jack MIDI Clock"
+#define APPVERSION "0.1.0"
 
 class JackMidiClock
 {
@@ -259,8 +260,19 @@ int JackMidiClock::process_callback(jack_nframes_t nframes, void *arg) {
     return static_cast<JackMidiClock*>(arg)->process(nframes);
 }
 
+void about()
+{
+    cout << APPNAME << " version " << APPVERSION
+	 << " Copyright (C) 2009 Gabriel M. Beddingfield" << endl
+	 << APPNAME << " comes with ABSOLUTELY NO WARRANTY." << endl
+	 << "This is free software, and you are welcome to redistribute it" << endl
+	 << "under conditions of the GNU PUBLIC LICENSE (version 2 or later)." << endl
+	 << endl;
+}
+
 int main(int argc, char **argv)
 {
+    about();
     JackMidiClock jmc;
 
     while(jmc.good())
