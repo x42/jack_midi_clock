@@ -92,7 +92,7 @@ JackMidiClock::JackMidiClock(void) :
 	    }
 	    break;
 	case JackServerStarted:
-	    CLIENT_SUCCESS("JACK Server started for Hydrogen.");
+	    CLIENT_SUCCESS("JACK Server started for " APPNAME);
 	    break;
 	case JackServerFailed:
 	    CLIENT_FAILURE("unable to connect");
