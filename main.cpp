@@ -204,7 +204,7 @@ int JackMidiClock::process(jack_nframes_t nframes)
     jack_midi_clear_buffer(port_buf);
 
     if( (xstate == JackTransportRolling)
-	&& (xpos.valid | JackPositionBBT) ) {
+	&& (xpos.valid & JackPositionBBT) ) {
 
 	// Frame interval of 24 clocks per quarter note.
 	double frames_per_beat =
@@ -221,26 +221,35 @@ int JackMidiClock::process(jack_nframes_t nframes)
 	jack_nframes_t interval = jack_nframes_t(round(_interval));
 	jack_nframes_t fr = 0;
 
-// 	cout << " frame = " << (xpos.frame)
-// 	     << " m_accum = " << (m_accum)
-// 	     << " interval = " << (interval)
-// 	     << " nframes = " << (nframes)
-// 	     << endl;
-	if( interval > nframes + m_accum ) {
-	    m_accum += nframes;
-	} else {
-	    fr = interval - m_accum;
-	    while( fr < nframes ) {
-		assert(fr < nframes);
-		buffer = jack_midi_event_reserve(port_buf, fr, 1);
-		if(buffer != 0) {
-		    buffer[0] = 0xF8;  // MIDI Clock Pulse
-		} else {
-		    cout << "BUFFER RETURNED 0" << endl;
-		}
-		fr += interval;
+	#ifdef ENABLE_DEBUG
+ 	cout << " frame = " << (xpos.frame)
+	     << " frame_rate = " << (xpos.frame_rate)
+	     << " bpm = " << (xpos.beats_per_minute)
+	     << " beat_type = " << (xpos.beat_type)
+ 	     << " m_accum = " << (m_accum)
+ 	     << " interval = " << (interval)
+ 	     << " nframes = " << (nframes)
+ 	     << endl;
+	#endif
+	if( m_accum > interval ) {
+	    m_accum = interval;
+	}
+	fr = interval - m_accum;
+	while( fr < nframes ) {
+	    buffer = jack_midi_event_reserve(port_buf, fr, 1);
+	    if(buffer != 0) {
+		buffer[0] = 0xF8;  // MIDI Clock Pulse
+	    } else {
+		cout << "BUFFER RETURNED 0" << endl;
 	    }
+	    fr += interval;
+	}
+	if( fr >= nframes ) {
+	    // last frame in this cycle = fr - interval
+	    // incomplete frames in this cycle = nframes - (fr - interval)
 	    m_accum = nframes - (fr - interval);
+	} else {
+	    m_accum += nframes;
 	}
     }
     return 0;
