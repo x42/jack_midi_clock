@@ -11,7 +11,8 @@
 #include <cmath>
 
 #include <stdlib.h>
-//#include <unistd.h>
+#include <signal.h>
+#include <errno.h>
 
 using namespace std;
 
@@ -27,6 +28,7 @@ public:
     int process(jack_nframes_t nframes);
     static int process_callback(jack_nframes_t nframes, void *arg);
     bool good(void) { return m_good; }
+    void shutdown(void) { m_good = false; }
 
 private:
     jack_client_t* m_client;
@@ -270,15 +272,58 @@ void about()
 	 << endl;
 }
 
+JackMidiClock* jmc_instance = 0;
+
+void sig_handler(int)
+{
+    if( jmc_instance ) {
+	jmc_instance->shutdown();
+    }
+}
+
+void setup_signal_handler(int signum)
+{
+    struct sigaction act;
+    act.sa_handler = sig_handler;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = 0;
+    act.sa_restorer = 0;
+
+    if( sigaction( signum, &act, 0 ) ) {
+	cerr << "Error:  could not set up signal handler for signal #" << signum << endl;
+	switch( errno ) {
+	case EFAULT:
+	    cerr << "Invalid 'sigaction' structs given to sigaction()" << endl;
+	    break;
+	case EINVAL:
+	    cerr << "Tried to set signal handler for invalid or unauthorized signal" << endl;
+	    break;
+	default:
+	    cerr << "Unknown error #" << errno << endl;
+	}	    
+	exit(0);
+    }
+}
+
 int main(int argc, char **argv)
 {
     about();
-    JackMidiClock jmc;
 
-    while(jmc.good())
+    setup_signal_handler(SIGHUP);
+    setup_signal_handler(SIGINT);
+    setup_signal_handler(SIGQUIT);
+    setup_signal_handler(SIGTERM);
+
     {
-	sleep(1);
+	JackMidiClock jmc;
+	jmc_instance = &jmc;
+
+	while(jmc.good())
+	{
+	    sleep(1);
+	}
     }
 
+    cout << "Disconnected from JACK server" << endl;
     return 0;
 }
