@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include <stdlib.h>
+#include <stdint.h>  // e.g. for uint8_t
 #include <signal.h>
 #include <errno.h>
 
@@ -31,10 +32,12 @@ public:
 
 private:
     int process(jack_nframes_t nframes);
+    void send_rt_message(void* port_buf, jack_nframes_t frame, uint8_t rt_msg);
 
     jack_client_t* m_client;
     jack_port_t* m_port;
     bool m_good;
+    jack_transport_state_t m_xstate;
 
     // Cached calculations
     jack_nframes_t m_accum;     // Frame of last clock in last process()
@@ -62,6 +65,7 @@ JackMidiClock::JackMidiClock(void) :
     m_client(0),
     m_port(0),
     m_good(true),
+    m_xstate(JackTransportStopped),
     m_accum(0)
 {
     jack_client_t* client;
@@ -198,6 +202,12 @@ JackMidiClock::~JackMidiClock(void)
  *   no transport master giving BBT info.
  *
  */
+const uint8_t MIDI_RT_CLOCK = 0xF8;
+// 0xF9 is undefined
+const uint8_t MIDI_RT_START = 0xFA;
+const uint8_t MIDI_RT_CONTINUE = 0xFB;
+const uint8_t MIDI_RT_STOP = 0xFC;
+
 int JackMidiClock::process(jack_nframes_t nframes)
 {
     // See this->m_accum for state variable
@@ -207,6 +217,36 @@ int JackMidiClock::process(jack_nframes_t nframes)
     unsigned char* buffer;
     jack_midi_clear_buffer(port_buf);
 
+    if( xstate != m_xstate ) {
+	switch(xstate) {
+	case JackTransportStopped:
+	    send_rt_message(port_buf, 0, MIDI_RT_STOP);
+	    #ifdef ENABLE_DEBUG
+	    cout << "MIDI STOP" << endl;
+	    #endif
+	    break;
+	case JackTransportStarting:
+	case JackTransportRolling:
+	    if( m_xstate == JackTransportStarting )
+		break; // Should have already sent the start.
+	    if( xpos.frame == 0 ) {
+		send_rt_message(port_buf, 0, MIDI_RT_START);
+		#ifdef ENABLE_DEBUG
+		cout << "MIDI START" << endl;
+		#endif
+	    } else {
+		send_rt_message(port_buf, 0, MIDI_RT_CONTINUE);
+		#ifdef ENABLE_DEBUG
+		cout << "MIDI CONTINUE" << endl;
+		#endif
+	    }
+	    break;
+	case JackTransportLooping:
+	    // ignored
+	    break;
+	}
+	m_xstate = xstate;
+    }
     if( (xstate == JackTransportRolling)
 	&& (xpos.valid & JackPositionBBT) ) {
 
@@ -240,12 +280,7 @@ int JackMidiClock::process(jack_nframes_t nframes)
 	}
 	fr = interval - m_accum;
 	while( fr < nframes ) {
-	    buffer = jack_midi_event_reserve(port_buf, fr, 1);
-	    if(buffer != 0) {
-		buffer[0] = 0xF8;  // MIDI Clock Pulse
-	    } else {
-		cout << "BUFFER RETURNED 0" << endl;
-	    }
+	    send_rt_message(port_buf, fr, MIDI_RT_CLOCK);
 	    fr += interval;
 	}
 	if( fr >= nframes ) {
@@ -257,6 +292,17 @@ int JackMidiClock::process(jack_nframes_t nframes)
 	}
     }
     return 0;
+}
+
+void JackMidiClock::send_rt_message(void* port_buf, jack_nframes_t frame, uint8_t rt_msg)
+{
+    uint8_t *buffer;
+    buffer = jack_midi_event_reserve(port_buf, frame, 1);
+    if(buffer != 0) {
+	buffer[0] = rt_msg;
+    } else {
+	cerr << "Could not write to buffer" << endl;
+    }
 }
 
 int JackMidiClock::process_callback(jack_nframes_t nframes, void *arg) {
