@@ -25,12 +25,13 @@ public:
     JackMidiClock(void);
     ~JackMidiClock();
 
-    int process(jack_nframes_t nframes);
     static int process_callback(jack_nframes_t nframes, void *arg);
     bool good(void) { return m_good; }
     void shutdown(void) { m_good = false; }
 
 private:
+    int process(jack_nframes_t nframes);
+
     jack_client_t* m_client;
     jack_port_t* m_port;
     bool m_good;
