@@ -19,6 +19,9 @@ DESCRIPTION
 This program is a simple JACK client that sends out MIDI Clock pulses
 based on the current tempo given by the JACK transport.
 
+Homepage:  http://www.teuton.org/~gabriel/jack_midi_clock
+Source repos:  git://gabe.is-a-geek.org/git/jack_midi_clock.git
+
 DEPENDENCIES
 ============
 
