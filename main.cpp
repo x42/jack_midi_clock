@@ -40,7 +40,7 @@ private:
     jack_transport_state_t m_xstate;
 
     // Cached calculations
-    jack_nframes_t m_accum;     // Frame of last clock in last process()
+    double m_last_tick;
 
 };
 
@@ -66,7 +66,7 @@ JackMidiClock::JackMidiClock(void) :
     m_port(0),
     m_good(true),
     m_xstate(JackTransportStopped),
-    m_accum(0)
+    m_last_tick(0.0)
 {
     jack_client_t* client;
     jack_port_t* port;
@@ -128,7 +128,7 @@ JackMidiClock::JackMidiClock(void) :
 		}
 	    } else {
 		CLIENT_SUCCESS("Connected to JACK server");
-	    }				
+	    }
 	}
     }
 
@@ -166,7 +166,7 @@ JackMidiClock::JackMidiClock(void) :
 	m_good = false;
 	return;
     }
-	
+
     return;
 }
 
@@ -210,7 +210,6 @@ const uint8_t MIDI_RT_STOP = 0xFC;
 
 int JackMidiClock::process(jack_nframes_t nframes)
 {
-    // See this->m_accum for state variable
     jack_position_t xpos;
     jack_transport_state_t xstate = jack_transport_query(m_client, &xpos);
     void* port_buf = jack_port_get_buffer(m_port, nframes);
@@ -230,12 +229,16 @@ int JackMidiClock::process(jack_nframes_t nframes)
 	    if( m_xstate == JackTransportStarting )
 		break; // Should have already sent the start.
 	    if( xpos.frame == 0 ) {
+		m_last_tick = 0;
 		send_rt_message(port_buf, 0, MIDI_RT_START);
+		send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
 		#ifdef ENABLE_DEBUG
 		cout << "MIDI START" << endl;
 		#endif
 	    } else {
+		m_last_tick = xpos.frame;
 		send_rt_message(port_buf, 0, MIDI_RT_CONTINUE);
+		send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
 		#ifdef ENABLE_DEBUG
 		cout << "MIDI CONTINUE" << endl;
 		#endif
@@ -262,33 +265,27 @@ int JackMidiClock::process(jack_nframes_t nframes)
 	    / 4.0
 	    / 24.0;
 
-	jack_nframes_t interval = jack_nframes_t(round(_interval));
-	jack_nframes_t fr = 0;
-
 	#ifdef ENABLE_DEBUG
  	cout << " frame = " << (xpos.frame)
 	     << " frame_rate = " << (xpos.frame_rate)
 	     << " bpm = " << (xpos.beats_per_minute)
 	     << " beat_type = " << (xpos.beat_type)
- 	     << " m_accum = " << (m_accum)
- 	     << " interval = " << (interval)
- 	     << " nframes = " << (nframes)
+	     << " m_last_tick = " << (m_last_tick)
+	     << " interval = " << (_interval)
+	     << " nframes = " << (nframes)
  	     << endl;
 	#endif
-	if( m_accum > interval ) {
-	    m_accum = interval;
-	}
-	fr = interval - m_accum;
-	while( fr < nframes ) {
-	    send_rt_message(port_buf, fr, MIDI_RT_CLOCK);
-	    fr += interval;
-	}
-	if( fr >= nframes ) {
-	    // last frame in this cycle = fr - interval
-	    // incomplete frames in this cycle = nframes - (fr - interval)
-	    m_accum = nframes - (fr - interval);
-	} else {
-	    m_accum += nframes;
+	while( true ) {
+	    double next_tick = m_last_tick + _interval;
+	    int64_t next_tick_offset = llrint (next_tick) - xpos.frame;
+	    if (next_tick_offset >= nframes) break;
+	    #ifdef ENABLE_DEBUG
+	    cerr << "TX @ " <<  next_tick_offset << endl;
+	    #endif
+	    if (next_tick_offset >=0) {
+		send_rt_message(port_buf, next_tick_offset, MIDI_RT_CLOCK);
+	    }
+	    m_last_tick = next_tick;
 	}
     }
     return 0;
@@ -347,7 +344,7 @@ void setup_signal_handler(int signum)
 	    break;
 	default:
 	    cerr << "Unknown error #" << errno << endl;
-	}	    
+	}
 	exit(0);
     }
 }
