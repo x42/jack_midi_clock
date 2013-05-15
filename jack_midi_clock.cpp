@@ -388,3 +388,5 @@ int main(int argc, char **argv)
     cout << "Disconnected from JACK server" << endl;
     return 0;
 }
+
+/* vi:set ts=8 sts=4 sw=4: */
