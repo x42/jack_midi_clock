@@ -2,12 +2,12 @@ PREFIX ?= /usr/local
 bindir ?= $(PREFIX)/bin
 mandir ?= $(PREFIX)/share/man
 
-CXXFLAGS ?= -ggdb -Wall -O3
+CXXFLAGS ?= -Wall -O3
 
 ###############################################################################
 
 CXXFLAGS  += `pkg-config --cflags jack`
-LOADLIBES  = `pkg-config --cflags --libs jack`
+LOADLIBES  = `pkg-config --cflags --libs jack` -lm
 man1dir    = $(mandir)/man1
 
 ###############################################################################
