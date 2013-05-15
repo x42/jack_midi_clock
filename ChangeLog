@@ -1,0 +1,7 @@
+2013-05-15 (0.1.1)  Robin Gareus <robin@gareus.org>
+* fix rounding error and alignment (robin)
+* clean up and standardize build environment (robin)
+* implement MIDI start, stop and continue (gabriel)
+
+2009-08-01 (0.1.0)  Gabriel M. Beddingfield <gabriel@teuton.org>
+* intial release
