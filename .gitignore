@@ -1,1 +1,5 @@
 jack_midi_clock
+
+*.swp
+cscope.*
+tags
