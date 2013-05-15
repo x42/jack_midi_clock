@@ -18,7 +18,7 @@
 using namespace std;
 
 #define APPNAME "Jack MIDI Clock"
-#define APPVERSION "0.1.0"
+#define APPVERSION "0.1.1"
 
 class JackMidiClock
 {
@@ -213,7 +213,6 @@ int JackMidiClock::process(jack_nframes_t nframes)
     jack_position_t xpos;
     jack_transport_state_t xstate = jack_transport_query(m_client, &xpos);
     void* port_buf = jack_port_get_buffer(m_port, nframes);
-    unsigned char* buffer;
     jack_midi_clear_buffer(port_buf);
 
     if( xstate != m_xstate ) {
@@ -246,6 +245,8 @@ int JackMidiClock::process(jack_nframes_t nframes)
 	    break;
 	case JackTransportLooping:
 	    // ignored
+	    break;
+	default:
 	    break;
 	}
 	m_xstate = xstate;
