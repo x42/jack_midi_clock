@@ -1,7 +1,8 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: jack-midi-clock
-Maintainer: Robin Gareus <robin@gareus.org>
-Upstream-Contact: Gabriel M. Beddingfield <gabriel@teuton.org>
+Upstream-Name: jack_midi_clock
+Upstream-Contact:
+ Gabriel M. Beddingfield <gabriel@teuton.org>
+ Robin Gareus <robin@gareus.org>
 Source: git://github.com/x42/jack_midi_clock.git
 
 Files: *
@@ -15,7 +16,7 @@ Copyright:
  2012 Robin Gareus <robin@gareus.org>
 License: GPL-2+
 
-License: GPL-2
+License: GPL-2+
  This package is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or

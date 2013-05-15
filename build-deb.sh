@@ -10,6 +10,7 @@ GITBRANCH=${GITBRANCH:-master}
 echo "debian -export-ignore" >> .git/info/attributes
 
 git-buildpackage \
+	--git-no-pristine-tar \
 	--git-upstream-branch=$GITBRANCH --git-debian-branch=$GITBRANCH \
 	--git-upstream-tree=branch \
 	--git-export-dir=${TMPDIR} --git-cleaner=/bin/true \
@@ -28,10 +29,15 @@ if test $ERROR != 0; then
 	exit $ERROR
 fi
 
-lintian -i --pedantic ${TMPDIR}/jmc_${DEBRELEASE}_*.changes \
+lintian -i --pedantic ${TMPDIR}/jack-midi-clock_${DEBRELEASE}_*.changes \
 	| tee /tmp/jmc.issues
 
 echo
-ls ${TMPDIR}/jmc_${DEBRELEASE}_*.changes
 echo
-echo dput rg42 ${TMPDIR}/jmc_${DEBRELEASE}_*.changes
+ls -l ${TMPDIR}/jack-midi-clock_${DEBRELEASE}_*.changes
+ls -l ${TMPDIR}/jack-midi-clock_${DEBRELEASE}_*.deb
+
+echo
+echo "sudo dpkg -i ${TMPDIR}/jack-midi-clock_${DEBRELEASE}_*.deb"
+echo
+echo "dput rg42 ${TMPDIR}/jack-midi-clock_${DEBRELEASE}_*.changes"
