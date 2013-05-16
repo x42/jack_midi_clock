@@ -1,5 +1,5 @@
-Jack Midi Clock - MIDI Clock Source and JACK Transport Slave
-============================================================
+Jack MIDI Clock
+===============
 
 This program is a [JACK](http://jackaudio.org/) client that sends MIDI
 beat clock pulses based on the current tempo given by the JACK transport.
@@ -27,7 +27,7 @@ e.g. `make install PREFIX=/usr` and also supports `uninstall` target as well as
 individual `[un]install-bin`, `[un]install-man` targets.
 
 
-USAGE
+Usage
 -----
 
 Start jackd and some application to act as JACK-timecode master, then launch:
