@@ -175,12 +175,21 @@ static int process (jack_nframes_t nframes, void *arg) {
     return 0;
   }
 
-  const double quarter_notes_per_beat = 1.0; // xpos.beat_type / 4.0; XXX
-  const double samples_per_quarter_note = samples_per_beat / quarter_notes_per_beat;
-  const double interval = samples_per_quarter_note / 24.0;
+  /* the quarter-notes per beat is usually independent of meter, isn't it?!
+   * it's true for 2/4, 3/4, 4/4 etc.
+   * should be true as well for 6/8, 2/2 -- x-check w/timecode masters
+   *
+   * quarter_notes_per_beat = xpos.beat_type / 4.0;
+   */
+  const double quarter_notes_per_beat = 1.0;
 
+  /* MIDI Beat Clock: Send 24 ticks per quarter note  */
+  const double samples_per_quarter_note = samples_per_beat / quarter_notes_per_beat;
+  const double clock_tick_interval = samples_per_quarter_note / 24.0;
+
+  /* send clock ticks for this cycle */
   while(1) {
-    const double next_tick = mclk_last_tick + interval;
+    const double next_tick = mclk_last_tick + clock_tick_interval;
     const int64_t next_tick_offset = llrint(next_tick) - xpos.frame;
     if (next_tick_offset >= nframes) break;
     if (next_tick_offset >= 0) {
