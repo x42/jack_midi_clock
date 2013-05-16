@@ -20,28 +20,33 @@ jack_midi_clock: jack_midi_clock.c
 
 jack_mclk_dump: jack_mclk_dump.c
 
-install-bin: jack_midi_clock
+install-bin: jack_midi_clock jack_mclk_dump
 	install -d $(DESTDIR)$(bindir)
 	install -m755 jack_midi_clock $(DESTDIR)$(bindir)
+	install -m755 jack_mclk_dump $(DESTDIR)$(bindir)
 
-install-man: jack_midi_clock.1
+install-man: jack_midi_clock.1 jack_mclk_dump.1
 	install -d $(DESTDIR)$(man1dir)
 	install -m644 jack_midi_clock.1 $(DESTDIR)$(man1dir)
+	install -m644 jack_mclk_dump.1 $(DESTDIR)$(man1dir)
 
 uninstall-bin:
 	rm -f $(DESTDIR)$(bindir)/jack_midi_clock
+	rm -f $(DESTDIR)$(bindir)/jack_mclk_dump
 	-rmdir $(DESTDIR)$(bindir)
 
 uninstall-man:
 	rm -f $(DESTDIR)$(man1dir)/jack_midi_clock.1
+	rm -f $(DESTDIR)$(man1dir)/jack_mclk_dump.1
 	-rmdir $(DESTDIR)$(man1dir)
 	-rmdir $(DESTDIR)$(mandir)
 
 clean:
-	rm -f jack_midi_clock
+	rm -f jack_midi_clock jack_mclk_dump
 
-man: jack_midi_clock
+man: jack_midi_clock jack_mclk_dump
 	help2man -N -n 'JACK MIDI Beat Clock Generator' -o jack_midi_clock.1 ./jack_midi_clock
+	help2man -N -n 'JACK MIDI Beat Clock Decoder' -o jack_mclk_dump.1 ./jack_mclk_dump
 
 all: jack_midi_clock jack_mclk_dump
 
