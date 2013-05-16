@@ -99,6 +99,7 @@ static void send_rt_message(void* port_buf, jack_nframes_t time, uint8_t rt_msg)
  */
 static int process (jack_nframes_t nframes, void *arg) {
   double samples_per_beat;
+  jack_nframes_t bbt_offset = 0;
   jack_position_t xpos;
   jack_transport_state_t xstate = jack_transport_query(j_client, &xpos);
   void* port_buf = jack_port_get_buffer(mclk_output_port, nframes);
@@ -168,6 +169,9 @@ static int process (jack_nframes_t nframes, void *arg) {
   }
   else if(xpos.valid & JackPositionBBT) {
     samples_per_beat = (double) xpos.frame_rate * 60.0 / xpos.beats_per_minute;
+    if (xpos.valid & JackBBTFrameOffset) {
+      bbt_offset = xpos.bbt_offset;
+    }
   }
   else if(user_bpm > 0) {
     samples_per_beat = (double) xpos.frame_rate * 60.0 / user_bpm;
@@ -190,7 +194,7 @@ static int process (jack_nframes_t nframes, void *arg) {
   /* send clock ticks for this cycle */
   while(1) {
     const double next_tick = mclk_last_tick + clock_tick_interval;
-    const int64_t next_tick_offset = llrint(next_tick) - xpos.frame;
+    const int64_t next_tick_offset = llrint(next_tick) - xpos.frame - bbt_offset;
     if (next_tick_offset >= nframes) break;
     if (next_tick_offset >= 0) {
       send_rt_message(port_buf, next_tick_offset, MIDI_RT_CLOCK);
