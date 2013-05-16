@@ -76,19 +76,29 @@ static volatile unsigned long long monotonic_cnt = 0;
 
 static void process_jmidi_event(jack_midi_event_t *ev, unsigned long long mfcnt) {
 	timenfo tnfo;
+	if (ev->size != 1) return;
+
+	switch(ev->buffer[0]) {
+		case 0xf8: // clock
+		case 0xfa: // start
+		case 0xfb: // continue
+		case 0xfc: // stop
+			break;
+		default:
+			return;
+	}
+
 	memset(&tnfo, 0, sizeof(timenfo));
-	if (ev->size==1 && ev->buffer[0] == 0xf8) {
-		tnfo.msg = 0xf8;
-		tnfo.tme = mfcnt + ev->time;
+	tnfo.msg = ev->buffer[0];
+	tnfo.tme = mfcnt + ev->time;
 
-		if (jack_ringbuffer_write_space(rb) >= sizeof(timenfo)) {
-			jack_ringbuffer_write(rb, (void *) &tnfo, sizeof(timenfo));
-		}
+	if (jack_ringbuffer_write_space(rb) >= sizeof(timenfo)) {
+		jack_ringbuffer_write(rb, (void *) &tnfo, sizeof(timenfo));
+	}
 
-		if (pthread_mutex_trylock (&msg_thread_lock) == 0) {
-			pthread_cond_signal (&data_ready);
-			pthread_mutex_unlock (&msg_thread_lock);
-		}
+	if (pthread_mutex_trylock (&msg_thread_lock) == 0) {
+		pthread_cond_signal (&data_ready);
+		pthread_mutex_unlock (&msg_thread_lock);
 	}
 }
 
@@ -97,7 +107,7 @@ static int process(jack_nframes_t nframes, void *arg) {
 	int nevents = jack_midi_get_event_count(jack_buf);
 	int n;
 
-	for (n=0; n<nevents; n++) {
+	for (n=0; n < nevents; n++) {
 		jack_midi_event_t ev;
 		jack_midi_event_get(&ev, jack_buf, n);
 		process_jmidi_event(&ev, monotonic_cnt);
@@ -183,6 +193,16 @@ double run_dll(DelayLockedLoop *dll, double pos) {
 	dll->t1 += dll->b * e + dll->e2;
 	dll->e2 += dll->c * e;
 	return (dll->t1 - dll->t0);
+}
+
+const char *msg_to_string(uint8_t msg) {
+	switch(msg) {
+		case 0xf8: return "clk";
+		case 0xfa: return "start";
+		case 0xfb: return "continue";
+		case 0xfc: return "stop";
+		default: return "??";
+	}
 }
 
 
@@ -291,12 +311,15 @@ int main (int argc, char ** argv) {
 			timenfo t;
 			double flt_bpm = 0;
 			jack_ringbuffer_read(rb, (char*) &t, sizeof(timenfo));
+
 			if (t.msg == 0xfa || t.msg == 0xfb || t.msg == 0xfc) {
 				sequence = 0;
-				fprintf(stdout, "EVENT %02x @ %lld%c", t.msg, t.tme, newline);
+				fprintf(stdout, "EVENT (0x%02x) %-38s @ %lld     \n",
+						t.msg, msg_to_string(t.msg), t.tme);
 			}
 			else if (sequence == 1) {
 				init_dll(&dll, t.tme, (t.tme - pt.tme));
+				flt_bpm = j_samplerate * 60.0 / (24.0 * (double)(t.tme - pt.tme));
 			} else if (sequence > 1) {
 				flt_bpm = 60.0 / (24.0 * run_dll(&dll, t.tme));
 			}
@@ -304,13 +327,17 @@ int main (int argc, char ** argv) {
 			if (t.msg == 0xf8 && sequence > 0) {
 				const double samples_per_quarter_note = (t.tme - pt.tme) * 24.0;
 				const double bpm = j_samplerate * 60.0 / samples_per_quarter_note;
-				fprintf(stdout, "cur: %.2fbpm  smooth: %.2fbpm  @  %lld%c", bpm, flt_bpm, t.tme, newline);
+				fprintf(stdout, "CLK cur: %6.2f[BPM] flt: %6.2f[BPM]  dt: %4lld[sm] @ %lld%c", bpm, flt_bpm, (t.tme - pt.tme), t.tme, newline);
+			} else if (t.msg == 0xf8) {
+				fprintf(stdout, "CLK cur:     ??[BPM] flt:     ??[BPM]  dt:   ??[sm] @ %lld%c", t.tme, newline);
 			}
 
-			memcpy(&pt, &t, sizeof(timenfo));
-			fflush(stdout);
-			sequence++;
+			if (t.msg == 0xf8) {
+				memcpy(&pt, &t, sizeof(timenfo));
+				sequence++;
+			}
 		}
+		fflush(stdout);
 		pthread_cond_wait (&data_ready, &msg_thread_lock);
 	}
 	pthread_mutex_unlock (&msg_thread_lock);
