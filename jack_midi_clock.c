@@ -47,9 +47,16 @@ static volatile enum {
 } client_state = Init;
 
 /* commandline options */
-static double                  user_bpm  = 0.0;
-static short                   force_bpm = 0;
+static double                  user_bpm   = 0.0;
+static short                   force_bpm  = 0;
+static short                   msg_filter = 0;
 
+/* used w/ msg_filter */
+enum {
+  MSG_NO_SEQUENCE = 1,
+  MSG_NO_CLOCK    = 2,
+  MSG_NO_POSITION = 4
+};
 
 /* MIDI System Real-Time Messages
  * https://en.wikipedia.org/wiki/MIDI_beat_clock
@@ -104,7 +111,9 @@ static int process (jack_nframes_t nframes, void *arg) {
   if( xstate != m_xstate ) {
     switch(xstate) {
       case JackTransportStopped:
-	send_rt_message(port_buf, 0, MIDI_RT_STOP);
+	if (!(msg_filter & MSG_NO_SEQUENCE)) {
+	  send_rt_message(port_buf, 0, MIDI_RT_STOP);
+	}
 	break;
       case JackTransportStarting:
       case JackTransportRolling:
@@ -112,20 +121,28 @@ static int process (jack_nframes_t nframes, void *arg) {
 	  break;
 	}
 	if( xpos.frame == 0 ) {
-	  send_rt_message(port_buf, 0, MIDI_RT_START);
+	  if (!(msg_filter & MSG_NO_SEQUENCE)) {
+	    send_rt_message(port_buf, 0, MIDI_RT_START);
+	  }
 	} else {
-	  send_rt_message(port_buf, 0, MIDI_RT_CONTINUE);
+	  if (!(msg_filter & MSG_NO_SEQUENCE)) {
+	    send_rt_message(port_buf, 0, MIDI_RT_CONTINUE);
+	  }
 	}
-	/* TODO send '0xf2' Song Position Pointer.
-	 * This is an internal 14 bit register that holds the number of
-	 * MIDI beats (1 beat = six MIDI clocks) since the start of the song.
-	 * l is the LSB, m the MSB
-	 *
-	 * 11110010 (0xf2)
-	 * 0lllllll
-	 * 0mmmmmmm
-	 */
-	send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
+	if (!(msg_filter & MSG_NO_POSITION)) {
+	  /* TODO send '0xf2' Song Position Pointer.
+	   * This is an internal 14 bit register that holds the number of
+	   * MIDI beats (1 beat = six MIDI clocks) since the start of the song.
+	   * l is the LSB, m the MSB
+	   *
+	   * 11110010 (0xf2)
+	   * 0lllllll
+	   * 0mmmmmmm
+	   */
+	}
+	if (!(msg_filter & MSG_NO_CLOCK)) {
+	  send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
+	}
 	break;
       default:
 	break;
@@ -138,6 +155,14 @@ static int process (jack_nframes_t nframes, void *arg) {
     return 0;
   }
 
+  if (msg_filter & MSG_NO_CLOCK) {
+    /* TODO allow to switch dynamically (SIGUSR1)?
+     * -> keep counting mclk_last_tick
+     */
+    return 0;
+  }
+
+  /* calculate clock tick interval */
   if(force_bpm && user_bpm > 0) {
     samples_per_beat = (double) xpos.frame_rate * 60.0 / user_bpm;
   }
