@@ -2,11 +2,13 @@ PREFIX ?= /usr/local
 bindir ?= $(PREFIX)/bin
 mandir ?= $(PREFIX)/share/man
 
-CXXFLAGS ?= -Wall -O3
+CFLAGS ?= -Wall -O3
+VERSION?=$(shell git describe --tags HEAD || echo "0.2.0")
 
 ###############################################################################
 
-CXXFLAGS  += `pkg-config --cflags jack`
+CFLAGS    += -DVERSION="\"$(VERSION)\""
+CFLAGS    += `pkg-config --cflags jack`
 LOADLIBES  = `pkg-config --cflags --libs jack` -lm
 man1dir    = $(mandir)/man1
 
@@ -14,7 +16,7 @@ man1dir    = $(mandir)/man1
 
 default: all
 
-jack_midi_clock: jack_midi_clock.cpp
+jack_midi_clock: jack_midi_clock.c
 
 install-bin: jack_midi_clock
 	install -d $(DESTDIR)$(bindir)
@@ -36,10 +38,13 @@ uninstall-man:
 clean:
 	rm -f jack_midi_clock
 
+man: jack_midi_clock
+	help2man -N -n 'JACK MIDI Beat Clock Generator' -o jack_midi_clock.1 ./jack_midi_clock
+
 all: jack_midi_clock
 
 install: install-bin install-man
 
 uninstall: uninstall-bin uninstall-man
 
-.PHONY: default all clean install install-bin install-man uninstall uninstall-bin uninstall-man
+.PHONY: default all man clean install install-bin install-man uninstall uninstall-bin uninstall-man
