@@ -241,24 +241,35 @@ static struct option const long_options[] =
 static void usage (int status) {
   printf ("jack_midi_clock - JACK app to generate MCLK from JACK transport.\n\n");
   printf ("Usage: jack_midi_clock [ OPTIONS ] [JACK-port]*\n\n");
-  printf ("Options:\n\
-  -b, --bpm <num>      set default BPM (if jack timecode master in n/a)\n\
-  -B, --force-bpm      ignore jack timecode master\n\
-  -h, --help           display this help and exit\n\
-  -V, --version        print version information and exit\n\
-\n");
-  printf ("\n\
-jack_midi_clock will send start, continue and stop messages whenever\n\
-the transport changes state.\n\
-\n\
-In order for jack_midi_clock to send clock messages, a JACK timecode master\n\
-must be present and provide the tempo map (bar, beat, tick).\n\
-Alternatively the -b option can be used to set a default BPM value\n\
-and -B can be used to override and ignore JACK timecode master.\n\
-\n\
-jack_midi_clock runs until it receives a TERM or QUIT signal or\n\
-jackd is terminated.\n\
-\n");
+  printf ("Options:\n"
+
+"  -b, --bpm <num>       default BPM (if jack timecode master in not available)\n"
+"  -B, --force-bpm       ignore jack timecode master\n"
+"  -h, --help            display this help and exit\n"
+"  -V, --version         print version information and exit\n"
+
+"\n");
+  printf ("\n"
+
+/*                                  longest help text w/80 chars per line ---->|\n" */
+
+"jack_midi_clock will send start, continue and stop messages whenever\n"
+"the transport changes state.\n"
+"\n"
+"In order for jack_midi_clock to send clock messages, a JACK timecode master\n"
+"must be present and provide the tempo map (bar, beat, tick).\n"
+"Alternatively the -b option can be used to set a default BPM value.\n"
+"If a value larger than zero is given, it will be used if no timecode master\n"
+"is present. Combined with the -B option it can used to override and ignore\n"
+"JACK timecode master.\n"
+"\n"
+"Either way, jack_midi_clock will never act as timecode master itself.\n"
+"\n"
+"jack_midi_clock runs until it receives a HUP or INT signal or\n"
+"jackd is terminated.\n"
+
+
+"\n");
   printf ("Report bugs to Robin Gareus <robin@gareus.org>\n"
           "Website: https://github.com/x42/jack_midi_clock/\n"
 	  );
