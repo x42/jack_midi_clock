@@ -1,5 +1,5 @@
-jack-midi-clock (0.2.0-1) unstable; urgency=low
+jack-midi-clock (0.3.0-1) unstable; urgency=low
 
   * dummy entry -- this is a package for upstream testing
 
- -- Robin Gareus <robin@gareus.org>  Thu, 16 May 2013 16:42:14 +0200
+ -- Robin Gareus <robin@gareus.org>  Thu, 16 May 2013 21:28:29 +0200
