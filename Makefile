@@ -7,6 +7,13 @@ VERSION?=$(shell (git describe --tus HEAD 2>/dev/null || echo "v0.3.0") | sed 's
 
 ###############################################################################
 
+ifeq ($(shell pkg-config --exists jack || echo no), no)
+  $(warning *** libjack from http://jackaudio.org is required)
+  $(error   Please install libjack-dev, libjack-jackd2-dev)
+endif
+
+###############################################################################
+
 override CFLAGS += -DVERSION="\"$(VERSION)\""
 override CFLAGS += `pkg-config --cflags jack`
 LOADLIBES = `pkg-config --cflags --libs jack` -lm -lpthread
