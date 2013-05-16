@@ -9,7 +9,7 @@ VERSION?=$(shell (git describe --tus HEAD 2>/dev/null || echo "v0.3.0") | sed 's
 
 override CFLAGS += -DVERSION="\"$(VERSION)\""
 override CFLAGS += `pkg-config --cflags jack`
-LOADLIBES = `pkg-config --cflags --libs jack` -lm
+LOADLIBES = `pkg-config --cflags --libs jack` -lm -lpthread
 man1dir   = $(mandir)/man1
 
 ###############################################################################
