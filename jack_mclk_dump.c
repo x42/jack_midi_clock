@@ -43,6 +43,7 @@
 #include <jack/midiport.h>
 
 #define RBSIZE 20
+#define DLLBANDWIDTH (1.0/6.0) // Hz
 
 typedef struct {
 	uint8_t msg;
@@ -56,6 +57,12 @@ static pthread_cond_t data_ready = PTHREAD_COND_INITIALIZER;
 /* options */
 char newline = '\r'; // or '\n';
 
+typedef struct {
+	double t0; ///< time at the beginning of the Mclk tick
+	double t1; ///< expected next Mclk tick
+	double e2; ///< second order loop error
+	double b, c, omega; ///< DLL filter coefficients
+} DelayLockedLoop;
 
 /************************************************
  * jack-midi
@@ -160,6 +167,24 @@ static void port_connect(char *mclk_port) {
 	}
 }
 
+void init_dll(DelayLockedLoop *dll, double pos, double speed) {
+	double omega = 2.0 * M_PI * DLLBANDWIDTH * speed / (double) j_samplerate;
+	dll->b = 1.4142135623730950488 * omega;
+	dll->c = omega * omega;
+
+	dll->e2 = speed / (double) j_samplerate;
+	dll->t0 = pos / (double) j_samplerate;
+	dll->t1 = dll->t0 + dll->e2;
+}
+
+double run_dll(DelayLockedLoop *dll, double pos) {
+	const double e = pos / (double) j_samplerate - dll->t1;
+	dll->t0 = dll->t1;
+	dll->t1 += dll->b * e + dll->e2;
+	dll->e2 += dll->c * e;
+	return (dll->t1 - dll->t0);
+}
+
 
 /**************************
  * main application code
@@ -229,6 +254,8 @@ void wearedone(int sig) {
 int main (int argc, char ** argv) {
 	int i;
 	timenfo pt;
+	DelayLockedLoop dll;
+	uint64_t sequence = 0;
 
 	decode_switches (argc, argv);
 
@@ -262,16 +289,27 @@ int main (int argc, char ** argv) {
 		const int mqlen = jack_ringbuffer_read_space (rb) / sizeof(timenfo);
 		for (i=0; i < mqlen; ++i) {
 			timenfo t;
+			double flt_bpm = 0;
 			jack_ringbuffer_read(rb, (char*) &t, sizeof(timenfo));
-			// TODO print start/stop/continue msg
-			// DLL, reset DLL on start/stop/cont...
-			if (t.msg == 0xf8) {
+			if (t.msg == 0xfa || t.msg == 0xfb || t.msg == 0xfc) {
+				sequence = 0;
+				fprintf(stdout, "EVENT %02x @ %lld%c", t.msg, t.tme, newline);
+			}
+			else if (sequence == 1) {
+				init_dll(&dll, t.tme, (t.tme - pt.tme));
+			} else if (sequence > 1) {
+				flt_bpm = 60.0 / (24.0 * run_dll(&dll, t.tme));
+			}
+
+			if (t.msg == 0xf8 && sequence > 0) {
 				const double samples_per_quarter_note = (t.tme - pt.tme) * 24.0;
 				const double bpm = j_samplerate * 60.0 / samples_per_quarter_note;
-				fprintf(stdout, "%.2f @ %lld%c", bpm, t.tme, newline);
+				fprintf(stdout, "cur: %.2fbpm  smooth: %.2fbpm  @  %lld%c", bpm, flt_bpm, t.tme, newline);
 			}
+
 			memcpy(&pt, &t, sizeof(timenfo));
 			fflush(stdout);
+			sequence++;
 		}
 		pthread_cond_wait (&data_ready, &msg_thread_lock);
 	}
