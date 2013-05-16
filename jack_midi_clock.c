@@ -95,7 +95,7 @@ static void send_rt_message(void* port_buf, jack_nframes_t time, uint8_t rt_msg)
 }
 
 /**
- * jack audio process callback
+ * jack process callback
  */
 static int process (jack_nframes_t nframes, void *arg) {
   double samples_per_beat;
