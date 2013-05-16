@@ -3,14 +3,14 @@ bindir ?= $(PREFIX)/bin
 mandir ?= $(PREFIX)/share/man
 
 CFLAGS ?= -Wall -O3
-VERSION?=$(shell git describe --tags HEAD || echo "0.2.0")
+VERSION?=$(shell (git describe --tus HEAD 2>/dev/null || echo "v0.2.0") | sed 's/^v//')
 
 ###############################################################################
 
-CFLAGS    += -DVERSION="\"$(VERSION)\""
-CFLAGS    += `pkg-config --cflags jack`
-LOADLIBES  = `pkg-config --cflags --libs jack` -lm
-man1dir    = $(mandir)/man1
+override CFLAGS += -DVERSION="\"$(VERSION)\""
+override CFLAGS += `pkg-config --cflags jack`
+LOADLIBES = `pkg-config --cflags --libs jack` -lm
+man1dir   = $(mandir)/man1
 
 ###############################################################################
 

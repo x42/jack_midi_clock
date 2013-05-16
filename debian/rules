@@ -1,10 +1,19 @@
 #!/usr/bin/make -f
+include /usr/share/dpkg/pkg-info.mk
 
 %:
 	dh $@
 
 override_dh_auto_build:
-	$(MAKE)
+	$(MAKE) \
+		LDFLAGS=-Wl,--as-needed \
+		CFLAGS="-O2" \
+		VERSION="$(DEB_VERSION_UPSTREAM)"
 
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/jack-midi-clock PREFIX=/usr
+	$(MAKE) install \
+		DESTDIR=$(CURDIR)/debian/jack-midi-clock \
+		PREFIX=/usr \
+		VERSION="$(DEB_VERSION_UPSTREAM)"
+
+override_dh_auto_clean:
