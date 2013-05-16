@@ -141,18 +141,21 @@ static int process (jack_nframes_t nframes, void *arg) {
 	   * 0mmmmmmm
 	   */
 	}
-	if (!(msg_filter & MSG_NO_CLOCK)) {
-	  send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
-	}
 	break;
       default:
 	break;
+    }
+
+    if (xstate == JackTransportRolling) {
+      if (!(msg_filter & MSG_NO_CLOCK)) {
+	send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
+      }
     }
     mclk_last_tick = xpos.frame;
     m_xstate = xstate;
   }
 
-  if( (xstate != JackTransportRolling)) {
+  if(xstate != JackTransportRolling) {
     return 0;
   }
 
