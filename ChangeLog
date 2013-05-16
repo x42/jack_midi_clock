@@ -5,6 +5,7 @@
 * honor jack-shutdown callback
 * allow to auto-connect ports
 * allow to specify/override timecode-master BPM
+* add upstream debian packaging
 
 2013-05-15 (0.1.1)  Robin Gareus <robin@gareus.org>
 * fix rounding error and alignment (robin)
