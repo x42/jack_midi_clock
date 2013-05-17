@@ -85,8 +85,7 @@ static void cleanup(int sig) {
  * @param time sample offset of event
  * @param rt_msg message byte
  */
-static void send_rt_message(void* port_buf, jack_nframes_t time, uint8_t rt_msg)
-{
+static void send_rt_message(void* port_buf, jack_nframes_t time, uint8_t rt_msg) {
   uint8_t *buffer;
   buffer = jack_midi_event_reserve(port_buf, time, 1);
   if(buffer) {
@@ -173,6 +172,7 @@ static int process (jack_nframes_t nframes, void *arg) {
 	send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
       }
     }
+
     mclk_last_tick = xpos.frame;
     m_xstate = xstate;
   }
