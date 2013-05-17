@@ -44,9 +44,11 @@
 #include <jack/midiport.h>
 
 #define RBSIZE 20
+#define METRUM (4) // TODO allow to configure.
 
 typedef struct {
   uint8_t msg;
+  int pos;
   unsigned long long int tme;
 } timenfo;
 
@@ -82,9 +84,13 @@ static double dll_bandwidth = 6.0; // 1/Hz
  */
 static void process_jmidi_event(jack_midi_event_t *ev, unsigned long long mfcnt) {
   timenfo tnfo;
-  if (ev->size != 1) return;
+  memset(&tnfo, 0, sizeof(timenfo));
+  if (ev->size != 1 && !((ev->size == 3 && ev->buffer[0] == 0xf2 ))) return;
 
   switch(ev->buffer[0]) {
+    case 0xf2: // position
+      tnfo.pos = (ev->buffer[2]<<7) | ev->buffer[1];
+      break;
     case 0xf8: // clock
     case 0xfa: // start
     case 0xfb: // continue
@@ -94,7 +100,6 @@ static void process_jmidi_event(jack_midi_event_t *ev, unsigned long long mfcnt)
       return;
   }
 
-  memset(&tnfo, 0, sizeof(timenfo));
   tnfo.msg = ev->buffer[0];
   tnfo.tme = mfcnt + ev->time;
 
@@ -263,6 +268,8 @@ static void usage (int status) {
   printf ("\n\
 This tool subscribes to a JACK Midi Port and prints received Midi\n\
 beat clock and BPM to stdout.\n\
+\n\
+See also: jack_midi_clock(1)\n\
 \n");
   printf ("Report bugs to Robin Gareus <robin@gareus.org>\n"
 	  "Website and manual: <https://github.com/x42/jack_midi_clock>\n"
@@ -351,10 +358,17 @@ int main (int argc, char ** argv) {
       double flt_bpm = 0;
       jack_ringbuffer_read(rb, (char*) &t, sizeof(timenfo));
 
-      if (t.msg == 0xfa || t.msg == 0xfb || t.msg == 0xfc) {
+      if (t.msg == 0xf2) {
+	fprintf(stdout, "POS (0x%04x) %4d.%d[beats] %4d|%d|%d [BBT@4/4] %-5s @ %lld       \n",
+	    t.pos,
+	    1 + t.pos/4, t.pos%4,
+	    1 + (t.pos/4/METRUM), 1 + ((t.pos/4)%METRUM), t.pos%4,
+	    "", t.tme);
+      }
+      else if (t.msg == 0xfa || t.msg == 0xfb || t.msg == 0xfc) {
 	/* start, stop, continue -> reset */
 	sequence = 0;
-	fprintf(stdout, "EVENT (0x%02x) %-38s @ %lld	 \n",
+	fprintf(stdout, "EVENT (0x%02x) %-38s @ %lld       \n",
 	    t.msg, msg_to_string(t.msg), t.tme);
       }
       else if (sequence == 1) {
@@ -369,10 +383,10 @@ int main (int argc, char ** argv) {
       if (t.msg == 0xf8 && sequence > 0) {
 	const double samples_per_quarter_note = (t.tme - pt.tme) * 24.0;
 	const double bpm = samplerate * 60.0 / samples_per_quarter_note;
-	fprintf(stdout, "CLK cur: %6.2f[BPM] flt: %6.2f[BPM]  dt: %4lld[sm] @ %lld%c",
+	fprintf(stdout, "CLK cur: %6.2f[BPM] flt: %6.2f[BPM]  dt: %4lld[sm] @ %lld       %c",
 	    bpm, flt_bpm, (t.tme - pt.tme), t.tme, newline);
       } else if (t.msg == 0xf8) {
-	fprintf(stdout, "CLK cur:     ??[BPM] flt:     ??[BPM]	dt:   ??[sm] @ %lld%c",
+	fprintf(stdout, "CLK cur:     ??[BPM] flt:     ??[BPM]  dt:   ??[sm] @ %lld       %c",
 	    t.tme, newline);
       }
 
