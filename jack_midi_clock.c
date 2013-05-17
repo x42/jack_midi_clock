@@ -53,9 +53,9 @@ static short                   msg_filter = 0;
 
 /* used w/ msg_filter */
 enum {
-  MSG_NO_SEQUENCE = 1,
-  MSG_NO_CLOCK    = 2,
-  MSG_NO_POSITION = 4
+  MSG_NO_TRANSPORT = 1,
+  MSG_NO_CLOCK     = 2,
+  MSG_NO_POSITION  = 4
 };
 
 /* MIDI System Real-Time Messages
@@ -94,6 +94,37 @@ static void send_rt_message(void* port_buf, jack_nframes_t time, uint8_t rt_msg)
   }
 }
 
+static void send_pos_message(void* port_buf, jack_position_t *xpos) {
+  uint8_t *buffer;
+  if (msg_filter & MSG_NO_POSITION) return;
+  if (!(xpos->valid & JackPositionBBT)) return;
+
+  /* send '0xf2' Song Position Pointer.
+   * This is an internal 14 bit register that holds the number of
+   * MIDI beats (1 beat = six MIDI clocks) since the start of the song.
+   * l is the LSB, m the MSB
+   *
+   *  MIDI Beat Clock: 24 ticks per quarter note
+   *  one MIDI-beat = six MIDI clocks
+   *  -> 4 MIDI-beats per quarter note (jack beat)
+   *  Note: jack counts bars and beats starting at 1
+   */
+  const int bcnt =
+      4 * ((xpos->bar - 1) * xpos->beats_per_bar + (xpos->beat - 1))
+    + floor(4.0 * xpos->tick / (double) xpos->ticks_per_beat);
+
+  if (bcnt < 0 || bcnt >= 16384) {
+    return;
+  }
+  buffer = jack_midi_event_reserve(port_buf, 0, 3);
+  if(!buffer) {
+    return;
+  }
+  buffer[0] = 0xf2;
+  buffer[1] = (bcnt)&0x7f;  // LSB
+  buffer[2] = (bcnt>>7)&0x7f;  // MSB
+}
+
 /**
  * jack process callback
  */
@@ -112,34 +143,25 @@ static int process (jack_nframes_t nframes, void *arg) {
   if( xstate != m_xstate ) {
     switch(xstate) {
       case JackTransportStopped:
-	if (!(msg_filter & MSG_NO_SEQUENCE)) {
+	if (!(msg_filter & MSG_NO_TRANSPORT)) {
 	  send_rt_message(port_buf, 0, MIDI_RT_STOP);
 	}
+	send_pos_message(port_buf, &xpos);
 	break;
-      case JackTransportStarting:
       case JackTransportRolling:
+	send_pos_message(port_buf, &xpos);
+      case JackTransportStarting:
 	if(m_xstate == JackTransportStarting) {
 	  break;
 	}
 	if( xpos.frame == 0 ) {
-	  if (!(msg_filter & MSG_NO_SEQUENCE)) {
+	  if (!(msg_filter & MSG_NO_TRANSPORT)) {
 	    send_rt_message(port_buf, 0, MIDI_RT_START);
 	  }
 	} else {
-	  if (!(msg_filter & MSG_NO_SEQUENCE)) {
+	  if (!(msg_filter & MSG_NO_TRANSPORT)) {
 	    send_rt_message(port_buf, 0, MIDI_RT_CONTINUE);
 	  }
-	}
-	if (!(msg_filter & MSG_NO_POSITION)) {
-	  /* TODO send '0xf2' Song Position Pointer.
-	   * This is an internal 14 bit register that holds the number of
-	   * MIDI beats (1 beat = six MIDI clocks) since the start of the song.
-	   * l is the LSB, m the MSB
-	   *
-	   * 11110010 (0xf2)
-	   * 0lllllll
-	   * 0mmmmmmm
-	   */
 	}
 	break;
       default:
