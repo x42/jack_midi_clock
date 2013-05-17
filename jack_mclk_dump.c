@@ -73,7 +73,7 @@ static int run = 1;
 
 /* options */
 static char newline = '\r'; // or '\n';
-static double dll_bandwidth = 6.0;
+static double dll_bandwidth = 6.0; // 1/Hz
 
 
 /**
@@ -198,7 +198,7 @@ static void port_connect(char *mclk_port) {
  * set current time and period in samples
  */
 static void init_dll(DelayLockedLoop *dll, double tme, double period) {
-  double omega = 2.0 * M_PI * period / samplerate / dll_bandwidth;
+  const double omega = 2.0 * M_PI * period / dll_bandwidth / samplerate;
   dll->b = 1.4142135623730950488 * omega;
   dll->c = omega * omega;
 
@@ -244,6 +244,7 @@ void wearedone(int sig) {
 
 static struct option const long_options[] =
 {
+  {"bandwidth", required_argument, 0, 'b'},
   {"help", no_argument, 0, 'h'},
   {"newline", no_argument, 0, 'n'},
   {"version", no_argument, 0, 'V'},
@@ -254,9 +255,10 @@ static void usage (int status) {
   printf ("jack_mclk_dump - JACK MIDI Clock dump.\n\n");
   printf ("Usage: jack_mclk_dump [ OPTIONS ] [JACK-port]\n\n");
   printf ("Options:\n\
-  -h, --help		     display this help and exit\n\
-  -n, --newline		     print a newline after each Tick\n\
-  -V, --version		     print version information and exit\n\
+  -b, --bandwidth <1/Hz>     DLL bandwidth in 1/Hz (default: 6.0)\n\
+  -h, --help                 display this help and exit\n\
+  -n, --newline              print a newline after each Tick\n\
+  -V, --version              print version information and exit\n\
 \n");
   printf ("\n\
 This tool subscribes to a JACK Midi Port and prints received Midi\n\
@@ -272,11 +274,19 @@ static int decode_switches (int argc, char **argv) {
   int c;
 
   while ((c = getopt_long (argc, argv,
+	 "b:" /* bandwidth */
 	 "h"  /* help */
 	 "n"  /* newline */
-	 "V",  /* version */
+	 "V", /* version */
 	 long_options, (int *) 0)) != EOF) {
     switch (c) {
+      case 'b':
+	dll_bandwidth = atof(optarg);
+	if (dll_bandwidth < 0.1 || dll_bandwidth > 100.0) {
+	  fprintf(stderr, "Invalid bandwidth, should be 0.1 <= bw <= 100.0. Using 6.0sec\n");
+	  dll_bandwidth = 6.0;
+	}
+	break;
       case 'n':
 	newline = '\n';
 	break;
