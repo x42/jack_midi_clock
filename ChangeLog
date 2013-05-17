@@ -1,3 +1,7 @@
+2013-05-17 (0.3.1)  Robin Gareus <robin@gareus.org>
+* fix missing -lpthread (newer gcc)
+* expose DLL bandwidth as option to jack_mclk_dump
+
 2013-05-16 (0.3.0)  Robin Gareus <robin@gareus.org>
 * fix cycle of first Mclk message (Starting vs Rolling)
 * add debug tool - midi-clock dump

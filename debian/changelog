@@ -1,5 +1,7 @@
-jack-midi-clock (0.3.0-1) unstable; urgency=low
+jack-midi-clock (0.3.1-0.1) unstable; urgency=low
 
-  * dummy entry -- this is a package for upstream testing
+  * locally created custom package for upstream testing -- NMU
+  * see upstream ChangeLog
+  * https://github.com/x42/jack_midi_clock/commits/master
 
- -- Robin Gareus <robin@gareus.org>  Thu, 16 May 2013 21:28:29 +0200
+ -- Robin Gareus <robin@gareus.org>  Fri, 17 May 2013 02:36:40 +0200
