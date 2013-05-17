@@ -3,7 +3,7 @@ bindir ?= $(PREFIX)/bin
 mandir ?= $(PREFIX)/share/man
 
 CFLAGS ?= -Wall -O3
-VERSION?=$(shell (git describe --tus HEAD 2>/dev/null || echo "v0.3.0") | sed 's/^v//')
+VERSION?=$(shell (git describe --tags HEAD 2>/dev/null || echo "v0.3.0") | sed 's/^v//')
 
 ###############################################################################
 
