@@ -294,9 +294,11 @@ static void catchsig (int sig) {
 
 static struct option const long_options[] =
 {
-  {"help", no_argument, 0, 'h'},
   {"bpm", required_argument, 0, 'b'},
   {"force-bpm", no_argument, 0, 'B'},
+  {"help", no_argument, 0, 'h'},
+  {"no-position", no_argument, 0, 'P'},
+  {"no-transport", no_argument, 0, 'T'},
   {"version", no_argument, 0, 'V'},
   {NULL, 0, NULL, 0}
 };
@@ -306,10 +308,12 @@ static void usage (int status) {
   printf ("Usage: jack_midi_clock [ OPTIONS ] [JACK-port]*\n\n");
   printf ("Options:\n"
 
-"  -b, --bpm <num>       default BPM (if jack timecode master in not available)\n"
-"  -B, --force-bpm       ignore jack timecode master\n"
-"  -h, --help            display this help and exit\n"
-"  -V, --version         print version information and exit\n"
+"  -b, --bpm <num>        default BPM (if jack timecode master in not available)\n"
+"  -B, --force-bpm        ignore jack timecode master\n"
+"  -P, --no-position      do not send song-position (0xf2) messages\n"
+"  -T, --no-transport     do not send start/stop/continue messages\n"
+"  -h, --help             display this help and exit\n"
+"  -V, --version          print version information and exit\n"
 
 "\n");
   printf ("\n"
@@ -328,9 +332,13 @@ static void usage (int status) {
 "\n"
 "Either way, jack_midi_clock will never act as timecode master itself.\n"
 "\n"
-"jack_midi_clock runs until it receives a HUP or INT signal or\n"
-"jackd is terminated.\n"
-
+"Note that song-position information is only sent if a timecode master\n"
+"is present.\n"
+"\n"
+"jack_midi_clock runs until it receives a HUP or INT signal or jackd is\n"
+"terminated.\n"
+"\n"
+"See also: jack_transport(1), jack_mclk_dump(1)\n"
 
 "\n");
   printf ("Report bugs to Robin Gareus <robin@gareus.org>\n"
@@ -346,6 +354,8 @@ static int decode_switches (int argc, char **argv) {
 			   "b:"	/* bpm */
 			   "B"	/* force-bpm */
 			   "h"	/* help */
+			   "P"	/* no-position */
+			   "T"	/* no-transport */
 			   "V",	/* version */
 			   long_options, (int *) 0)) != EOF)
     {
@@ -356,6 +366,14 @@ static int decode_switches (int argc, char **argv) {
 
 	case 'B':
 	  force_bpm = 1;
+	  break;
+
+	case 'P':
+	  msg_filter |= MSG_NO_POSITION;
+	  break;
+
+	case 'T':
+	  msg_filter |= MSG_NO_TRANSPORT;
 	  break;
 
 	case 'V':
