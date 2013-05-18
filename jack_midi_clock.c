@@ -65,9 +65,10 @@ static volatile enum {
 } client_state = Init;
 
 /* commandline options */
-static double                  user_bpm   = 0.0;
-static short                   force_bpm  = 0;
-static short                   msg_filter = 0;
+static double   user_bpm   = 0.0;
+static short    force_bpm  = 0;
+static short    msg_filter = 0;     /** bitwise flags, MSG_NO_.. */
+static double   resync_delay = 2.0; /**< seconds between 'pos' and 'continue' message */
 
 /* MIDI System Real-Time Messages
  * https://en.wikipedia.org/wiki/MIDI_beat_clock
@@ -132,7 +133,7 @@ static const int64_t calc_song_pos(jack_position_t *xpos, int off) {
   if (off < 0) {
     /* auto offset */
     if (xpos->bar == 1 && xpos->beat == 1 && xpos->tick == 0) off = 0;
-    else off = rintf(xpos->beats_per_minute * 4.0 / 30.0); // 2 sec
+    else off = rintf(xpos->beats_per_minute * 4.0 * resync_delay / 60.0);
   }
 
   /* MIDI Beat Clock: 24 ticks per quarter note
@@ -411,6 +412,7 @@ static struct option const long_options[] =
 {
   {"bpm", required_argument, 0, 'b'},
   {"force-bpm", no_argument, 0, 'B'},
+  {"resync-delay", required_argument, 0, 'd'},
   {"help", no_argument, 0, 'h'},
   {"no-position", no_argument, 0, 'P'},
   {"no-transport", no_argument, 0, 'T'},
@@ -468,6 +470,7 @@ static int decode_switches (int argc, char **argv) {
   while ((c = getopt_long (argc, argv,
 			   "b:"	/* bpm */
 			   "B"	/* force-bpm */
+			   "d:"	/* resync-delay */
 			   "h"	/* help */
 			   "P"	/* no-position */
 			   "T"	/* no-transport */
@@ -485,6 +488,14 @@ static int decode_switches (int argc, char **argv) {
 
 	case 'P':
 	  msg_filter |= MSG_NO_POSITION;
+	  break;
+
+	case 'd':
+	  resync_delay = atof(optarg);
+	  if (resync_delay < 0 || resync_delay > 20) {
+	    fprintf(stderr, "Invalid resync-delay, should be 0 <= dly <= 20.0. Using 2.0sec.\n");
+	    resync_delay = 2.0;
+	  }
 	  break;
 
 	case 'T':
