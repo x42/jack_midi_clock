@@ -233,8 +233,12 @@ static int process (jack_nframes_t nframes, void *arg) {
 	    send_rt_message(port_buf, 0, MIDI_RT_STOP);
 	  }
 	  if (song_position_sync != 0) {
-	    /* re-set queue point for 'continue' message */
-	    song_position_sync = send_pos_message(port_buf, &xpos, -1);
+	    /* re-set 'continue' message sync point */
+	    if ((song_position_sync = send_pos_message(port_buf, &xpos, -1)) < 0) {
+	      if (!(msg_filter & MSG_NO_TRANSPORT)) {
+		send_rt_message(port_buf, 0, MIDI_RT_CONTINUE);
+	      }
+	    }
 	  } else {
 	    /* 'start' at 0, don't queue 'continue' message */
 	    song_position_sync = -1;
