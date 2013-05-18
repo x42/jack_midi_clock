@@ -88,7 +88,6 @@ static void cleanup(int sig) {
     jack_client_close (j_client);
     j_client = NULL;
   }
-  fprintf(stderr, "bye.\n");
 }
 
 /**
@@ -397,7 +396,6 @@ static void catchsig (int sig) {
 #ifndef _WIN32
   signal(SIGHUP, catchsig);
 #endif
-  fprintf(stderr,"caught signal - shutting down.\n");
   client_state = Exit;
 }
 
