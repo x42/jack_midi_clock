@@ -18,6 +18,8 @@
  *
  */
 
+//#define JACK_TRANSPORT_SYNC_CHECK // not rt-safe
+
 #ifdef WIN32
 #include <windows.h>
 #include <pthread.h>
@@ -59,6 +61,14 @@ typedef struct {
   double b, c, omega; ///< DLL filter coefficients
 } DelayLockedLoop;
 
+struct appstate {
+  timenfo pt; // previous timeinfo
+  DelayLockedLoop dll;
+  uint64_t transport; /// timestamp of transport start/continue, 0 if stopped
+  uint64_t sequence; /// beat clock signals since transport-state change
+  int bcnt;  /// last song position
+};
+
 /* jack connection */
 jack_client_t *j_client = NULL;
 jack_port_t   *mclk_input_port;
@@ -75,8 +85,11 @@ static int run = 1;
 
 /* options */
 static char newline = '\r'; // or '\n';
+static short keeplastclk = 1;  // print newline on events
 static double dll_bandwidth = 6.0; // 1/Hz
 
+static struct appstate state;
+static void print_time_event(struct appstate *s, timenfo *t);
 
 /**
  * parse Midi Beat Clock events
@@ -102,7 +115,9 @@ static void process_jmidi_event(jack_midi_event_t *ev, unsigned long long mfcnt)
 
   tnfo.msg = ev->buffer[0];
   tnfo.tme = mfcnt + ev->time;
-
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+  print_time_event(&state, &tnfo);
+#else
   if (jack_ringbuffer_write_space(rb) >= sizeof(timenfo)) {
     jack_ringbuffer_write(rb, (void *) &tnfo, sizeof(timenfo));
   }
@@ -111,6 +126,7 @@ static void process_jmidi_event(jack_midi_event_t *ev, unsigned long long mfcnt)
     pthread_cond_signal (&data_ready);
     pthread_mutex_unlock (&msg_thread_lock);
   }
+#endif
 }
 
 /**
@@ -225,7 +241,7 @@ static double run_dll(DelayLockedLoop *dll, double tme) {
   return (dll->t1 - dll->t0);
 }
 
-const char *msg_to_string(uint8_t msg) {
+const const char *msg_to_string(uint8_t msg) {
   switch(msg) {
     case 0xf8: return "clk";
     case 0xfa: return "start";
@@ -235,8 +251,106 @@ const char *msg_to_string(uint8_t msg) {
   }
 }
 
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+static const char *jt_to_string(jack_transport_state_t jts) {
+  switch(jts) {
+    case JackTransportStopped:  return ".";
+    case JackTransportRolling:  return ">";
+    case JackTransportStarting: return "*";
+    default: return "?";
+  }
+}
 
-void wearedone(int sig) {
+static void print_jt(jack_transport_state_t jts, jack_position_t *jtpos) {
+    if(jtpos->valid & JackPositionBBT) {
+      printf(" %s:%4d|%d|%d",
+	  jt_to_string(jts),
+	  jtpos->bar, jtpos->beat,
+	  (int) floor(4.0 * jtpos->tick / (double) jtpos->ticks_per_beat));
+    } else {
+      printf(" X:----|-|-");
+    }
+}
+#endif
+
+static void print_time_event(struct appstate *s, timenfo *t) {
+  double flt_bpm = 0;
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+    jack_position_t jtpos;
+    jack_transport_state_t jts = jack_transport_query(j_client, &jtpos);
+#endif
+
+  if (t->msg == 0xf2) {
+    /* song position */
+    s->bcnt = t->pos;
+
+    if (newline == '\r' && keeplastclk) printf("\n");
+    fprintf(stdout, "POS (0x%04x) %4d.%d[beats] %4d|%d|%d [BBT@4/4] %-16s",
+	t->pos,
+	1 + t->pos/4, t->pos%4,
+	1 + (t->pos/4/METRUM), 1 + ((t->pos/4)%METRUM), t->pos%4,
+	"");
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+      printf("           ");
+#endif
+    fprintf(stdout, " @ %lld       \n", t->tme);
+  }
+  else if (t->msg == 0xfa || t->msg == 0xfb || t->msg == 0xfc) {
+    /* start, stop, continue -> reset */
+    s->sequence = 0;
+    if (t->msg == 0xfc) s->transport = 0; // stop
+    else s->transport = t->tme;
+    if (t->msg == 0xfa) s->bcnt = 0; // start
+
+    if (newline == '\r' && keeplastclk) printf("\n");
+    fprintf(stdout, "EVENT (0x%02x) %-49s",
+	t->msg, msg_to_string(t->msg));
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+      printf("           ");
+#endif
+    fprintf(stdout, " @ %lld       \n", t->tme);
+  }
+  else if (s->sequence == 1) {
+    /* 2nd event in sequence -> initialize DLL with time difference */
+    init_dll(&s->dll, t->tme, (t->tme - s->pt.tme));
+    flt_bpm = samplerate * 60.0 / (24.0 * (double)(t->tme - s->pt.tme));
+  }
+  else if (s->sequence > 1) {
+    /* run dll, calculate filtered bpm */
+    flt_bpm = 60.0 / (24.0 * run_dll(&s->dll, t->tme));
+  }
+
+  /* print clock & bpm */
+  if (t->msg == 0xf8 && s->sequence > 0) {
+    const double samples_per_quarter_note = (t->tme - s->pt.tme) * 24.0;
+    const double bpm = samplerate * 60.0 / samples_per_quarter_note;
+    fprintf(stdout, "CLK cur: %7.2f[BPM] flt: %7.2f[BPM]  dt: %4lld[sm]", bpm, flt_bpm, (t->tme - s->pt.tme));
+    if (s->transport) {
+      int bp = s->bcnt + s->sequence / 6;
+      printf(" %4d|%d|%d", 1 + (bp/4/METRUM), 1 + ((bp/4)%METRUM), bp%4);
+    } else {
+      printf(" ----|-|-");
+    }
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+    print_jt(jts, &jtpos);
+#endif
+    fprintf(stdout, " @ %lld       %c", t->tme, newline);
+  } else if (t->msg == 0xf8) {
+    fprintf(stdout, "CLK cur:      ??[BPM] flt:      ??[BPM]  dt:   ??[sm]         ");
+#ifdef JACK_TRANSPORT_SYNC_CHECK
+    print_jt(jts, &jtpos);
+#endif
+    fprintf(stdout, " @ %lld       %c", t->tme, newline);
+  }
+
+  if (t->msg == 0xf8) {
+    memcpy(&s->pt, t, sizeof(timenfo));
+    s->sequence++;
+  }
+}
+
+
+static void wearedone(int sig) {
   fprintf(stderr,"caught signal - shutting down.\n");
   run=0;
   pthread_cond_signal (&data_ready);
@@ -314,9 +428,6 @@ static int decode_switches (int argc, char **argv) {
 
 int main (int argc, char ** argv) {
   int i;
-  timenfo pt;
-  DelayLockedLoop dll;
-  uint64_t sequence = 0;
 
   decode_switches (argc, argv);
 
@@ -344,8 +455,7 @@ int main (int argc, char ** argv) {
   signal(SIGINT, wearedone);
 #endif
 
-  memset(&pt, 0, sizeof(timenfo));
-  memset(&dll, 0, sizeof(DelayLockedLoop));
+  memset(&state, 0, sizeof(struct appstate));
   pthread_mutex_lock (&msg_thread_lock);
 
   /* all systems go */
@@ -355,45 +465,8 @@ int main (int argc, char ** argv) {
     for (i=0; i < mqlen; ++i) {
       /* process Mclk event */
       timenfo t;
-      double flt_bpm = 0;
       jack_ringbuffer_read(rb, (char*) &t, sizeof(timenfo));
-
-      if (t.msg == 0xf2) {
-	fprintf(stdout, "POS (0x%04x) %4d.%d[beats] %4d|%d|%d [BBT@4/4] %-5s @ %lld       \n",
-	    t.pos,
-	    1 + t.pos/4, t.pos%4,
-	    1 + (t.pos/4/METRUM), 1 + ((t.pos/4)%METRUM), t.pos%4,
-	    "", t.tme);
-      }
-      else if (t.msg == 0xfa || t.msg == 0xfb || t.msg == 0xfc) {
-	/* start, stop, continue -> reset */
-	sequence = 0;
-	fprintf(stdout, "EVENT (0x%02x) %-38s @ %lld       \n",
-	    t.msg, msg_to_string(t.msg), t.tme);
-      }
-      else if (sequence == 1) {
-	/* 2nd event in sequence -> initialize DLL with time difference */
-	init_dll(&dll, t.tme, (t.tme - pt.tme));
-	flt_bpm = samplerate * 60.0 / (24.0 * (double)(t.tme - pt.tme));
-      }
-      else if (sequence > 1) {
-	flt_bpm = 60.0 / (24.0 * run_dll(&dll, t.tme));
-      }
-
-      if (t.msg == 0xf8 && sequence > 0) {
-	const double samples_per_quarter_note = (t.tme - pt.tme) * 24.0;
-	const double bpm = samplerate * 60.0 / samples_per_quarter_note;
-	fprintf(stdout, "CLK cur: %6.2f[BPM] flt: %6.2f[BPM]  dt: %4lld[sm] @ %lld       %c",
-	    bpm, flt_bpm, (t.tme - pt.tme), t.tme, newline);
-      } else if (t.msg == 0xf8) {
-	fprintf(stdout, "CLK cur:     ??[BPM] flt:     ??[BPM]  dt:   ??[sm] @ %lld       %c",
-	    t.tme, newline);
-      }
-
-      if (t.msg == 0xf8) {
-	memcpy(&pt, &t, sizeof(timenfo));
-	sequence++;
-      }
+      print_time_event(&state, &t);
     }
     fflush(stdout);
     pthread_cond_wait (&data_ready, &msg_thread_lock);
