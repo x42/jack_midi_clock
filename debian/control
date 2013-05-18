@@ -12,5 +12,8 @@ Package: jack-midi-clock
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: MIDI beat clock utility
- A simple and robust command-line utility to create
- MIDI beat clock from JACK Transport.
+ A simple and robust command-line tool to send
+ MIDI beat clock that accurately follows JACK Transport.
+ .
+ It also features an instumentation tool to parse and dump
+ incoming MCLK messages.
