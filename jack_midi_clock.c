@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <unistd.h>
 #include <math.h>
 #include <getopt.h>
@@ -31,6 +32,23 @@
 #ifndef WIN32
 #include <signal.h>
 #endif
+
+/* bitwise flags -- used w/ msg_filter */
+enum {
+  MSG_NO_TRANSPORT  = 1,
+  MSG_NO_CLOCK      = 2,
+  MSG_NO_POSITION   = 4,
+  MSG_NO_CONT_CLOCK = 8
+};
+
+/* jack_position_t excerpt */
+struct bbtpos {
+  jack_position_bits_t valid;  /**< which other fields are valid */
+  int32_t      bar;            /**< current bar */
+  int32_t      beat;           /**< current beat-within-bar */
+  int32_t      tick;           /**< current tick-within-beat */
+  jack_double  bar_start_tick; /**< number of ticks that have elapsed between frame 0 and the first beat of the current measure. */
+};
 
 /* jack connection */
 static jack_port_t            *mclk_output_port = NULL;
@@ -46,17 +64,12 @@ static volatile enum {
   Exit
 } client_state = Init;
 
+static struct bbtpos last_xpos;
+
 /* commandline options */
 static double                  user_bpm   = 0.0;
 static short                   force_bpm  = 0;
-static short                   msg_filter = 0;
-
-/* used w/ msg_filter */
-enum {
-  MSG_NO_TRANSPORT = 1,
-  MSG_NO_CLOCK     = 2,
-  MSG_NO_POSITION  = 4
-};
+static short                   msg_filter = MSG_NO_CONT_CLOCK;
 
 /* MIDI System Real-Time Messages
  * https://en.wikipedia.org/wiki/MIDI_beat_clock
@@ -124,6 +137,25 @@ static void send_pos_message(void* port_buf, jack_position_t *xpos) {
   buffer[2] = (bcnt>>7)&0x7f;  // MSB
 }
 
+static int pos_changed (struct bbtpos *xp0, jack_position_t *xp1) {
+  if (!(xp0->valid & JackPositionBBT)) return -1;
+  if (!(xp1->valid & JackPositionBBT)) return -2;
+  if (   xp0->bar  == xp1->bar
+      && xp0->beat == xp1->beat
+      && xp0->tick == xp1->tick
+     ) return 0;
+  return 1;
+}
+
+static void remember_pos (struct bbtpos *xp0, jack_position_t *xp1) {
+  if (!(xp1->valid & JackPositionBBT)) return;
+  xp0->valid = xp1->valid;
+  xp0->bar   = xp1->bar;
+  xp0->beat  = xp1->beat;
+  xp0->tick  = xp1->tick;
+  xp0->bar_start_tick = xp1->bar_start_tick;
+}
+
 /**
  * jack process callback
  */
@@ -139,6 +171,15 @@ static int process (jack_nframes_t nframes, void *arg) {
     return 0;
   }
 
+  /* send position updates if stopped and located */
+  if (xstate == JackTransportStopped && xstate == m_xstate) {
+    if (pos_changed(&last_xpos, &xpos) > 0) {
+      send_pos_message(port_buf, &xpos);
+    }
+  }
+  remember_pos(&last_xpos, &xpos);
+
+  /* send RT messages start/stop/continue */
   if( xstate != m_xstate ) {
     switch(xstate) {
       case JackTransportStopped:
@@ -148,7 +189,16 @@ static int process (jack_nframes_t nframes, void *arg) {
 	send_pos_message(port_buf, &xpos);
 	break;
       case JackTransportRolling:
-	send_pos_message(port_buf, &xpos);
+	if(m_xstate == JackTransportStarting) {
+	  /*
+	   * TODO send stop
+	   * send_pos_message() ~ 3-4 second in the future
+	   * keep sending clocks
+	   * send 'start/continue' at the same time with clock signal
+	   * when transport reaches the specified position.
+	   */
+	  //send_pos_message(port_buf, &xpos); // XXX
+	}
       case JackTransportStarting:
 	if(m_xstate == JackTransportStarting) {
 	  break;
@@ -167,6 +217,7 @@ static int process (jack_nframes_t nframes, void *arg) {
 	break;
     }
 
+    /* initial beat tick */
     if (xstate == JackTransportRolling) {
       if (!(msg_filter & MSG_NO_CLOCK)) {
 	send_rt_message(port_buf, 0, MIDI_RT_CLOCK);
@@ -177,7 +228,7 @@ static int process (jack_nframes_t nframes, void *arg) {
     m_xstate = xstate;
   }
 
-  if(xstate != JackTransportRolling) {
+  if((xstate != JackTransportRolling) && (msg_filter & MSG_NO_CONT_CLOCK)) {
     return 0;
   }
 
@@ -418,6 +469,8 @@ int main (int argc, char **argv) {
   signal (SIGHUP, catchsig);
   signal (SIGINT, catchsig);
 #endif
+
+  memset(&last_xpos, 0, sizeof(struct bbtpos));
 
   client_state = Run;
   while (client_state != Exit) {
