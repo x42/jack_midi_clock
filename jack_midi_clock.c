@@ -157,7 +157,6 @@ static const int64_t send_pos_message(void* port_buf, jack_position_t *xpos, int
   /* send '0xf2' Song Position Pointer.
    * This is an internal 14 bit register that holds the number of
    * MIDI beats (1 beat = six MIDI clocks) since the start of the song.
-   * l is the LSB, m the MSB
    */
   if (bcnt < 0 || bcnt >= 16384) {
     return -1;
@@ -168,8 +167,8 @@ static const int64_t send_pos_message(void* port_buf, jack_position_t *xpos, int
     return -1;
   }
   buffer[0] = 0xf2;
-  buffer[1] = (bcnt)&0x7f;  // LSB
-  buffer[2] = (bcnt>>7)&0x7f;  // MSB
+  buffer[1] = (bcnt)&0x7f; // LSB
+  buffer[2] = (bcnt>>7)&0x7f; // MSB
   return bcnt;
 }
 
@@ -188,7 +187,8 @@ static void send_rt_message(void* port_buf, jack_nframes_t time, uint8_t rt_msg)
 }
 
 /**
- * jack process callback
+ * jack process callback.
+ * do the work: query jack-transport, send MIDI messages..
  */
 static int process (jack_nframes_t nframes, void *arg) {
   jack_position_t xpos;
@@ -425,8 +425,11 @@ static void usage (int status) {
   printf ("Usage: jack_midi_clock [ OPTIONS ] [JACK-port]*\n\n");
   printf ("Options:\n"
 
-"  -b, --bpm <num>        default BPM (if jack timecode master in not available)\n"
+"  -b <bpm>, --bpm <bpm>\n"
+"                         default BPM (if jack timecode master in not available)\n"
 "  -B, --force-bpm        ignore jack timecode master\n"
+"  -d <sec>, --resync-delay <sec>\n"
+"                         seconds between 'song-position' and 'continue' message\n"
 "  -P, --no-position      do not send song-position (0xf2) messages\n"
 "  -T, --no-transport     do not send start/stop/continue messages\n"
 "  -h, --help             display this help and exit\n"
@@ -437,20 +440,28 @@ static void usage (int status) {
 
 /*                                  longest help text w/80 chars per line ---->|\n" */
 
-"jack_midi_clock will send start, continue and stop messages whenever\n"
-"the transport changes state.\n"
+"jack_midi_clock sends MIDI beat clock message if jack-transport is rolling.\n"
+"it also sends start, continue and stop MIDI realtime messages whenever\n"
+"the transport changes state (unless -T option is used).\n"
 "\n"
 "In order for jack_midi_clock to send clock messages, a JACK timecode master\n"
 "must be present and provide the tempo map (bar, beat, tick).\n"
 "Alternatively the -b option can be used to set a default BPM value.\n"
 "If a value larger than zero is given, it will be used if no timecode master\n"
 "is present. Combined with the -B option it can used to override and ignore\n"
-"JACK timecode master.\n"
+"the JACK timecode master and only act on transport state alone.\n"
 "\n"
 "Either way, jack_midi_clock will never act as timecode master itself.\n"
 "\n"
-"Note that song-position information is only sent if a timecode master\n"
-"is present.\n"
+"Note that song-position information is only sent if a timecode master is\n"
+"present ad the -P option is not given.\n"
+"\n"
+"To allow external synths to accurately sync to song-position, there is a two\n"
+"second delay between the 'song-position changed' message (which is not a MIDI\n"
+"realtime message) and the 'continue transport' message.\n"
+"This delay can be configured with the -d option and is only relevant for if\n"
+"playback starts at a bar|beat|tick other than 1|1|0 in which case a 'start'\n"
+"message is sent immediately.\n"
 "\n"
 "jack_midi_clock runs until it receives a HUP or INT signal or jackd is\n"
 "terminated.\n"
@@ -520,6 +531,7 @@ static int decode_switches (int argc, char **argv) {
 }
 
 int main (int argc, char **argv) {
+  memset(&last_xpos, 0, sizeof(struct bbtpos));
 
   decode_switches (argc, argv);
 
@@ -545,8 +557,10 @@ int main (int argc, char **argv) {
   signal (SIGINT, catchsig);
 #endif
 
-  memset(&last_xpos, 0, sizeof(struct bbtpos));
 
+  /* all systems go.
+   * processs() does the work in jack realtime context
+   */
   client_state = Run;
   while (client_state != Exit) {
     sleep (1);
