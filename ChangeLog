@@ -1,3 +1,6 @@
+2013-05-27 (0.4.1)  Robin Gareus <robin@gareus.org>
+* remove reference to [packed] jack_double 
+
 2013-05-18 (0.4.0)  Robin Gareus <robin@gareus.org>
 * accurate song-position + start/continue sync
 * send song-position on transport locate
@@ -30,4 +33,4 @@
 * implement MIDI start, stop and continue (gabriel)
 
 2009-08-01 (0.1.0)  Gabriel M. Beddingfield <gabriel@teuton.org>
-* intial release
+* initial release
