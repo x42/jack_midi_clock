@@ -42,10 +42,10 @@ enum {
 /* jack_position_t - excerpt */
 struct bbtpos {
   jack_position_bits_t valid;  /**< which other fields are valid */
-  int32_t      bar;            /**< current bar */
-  int32_t      beat;           /**< current beat-within-bar */
-  int32_t      tick;           /**< current tick-within-beat */
-  jack_double  bar_start_tick; /**< number of ticks that have elapsed between frame 0 and the first beat of the current measure. */
+  int32_t   bar;            /**< current bar */
+  int32_t   beat;           /**< current beat-within-bar */
+  int32_t   tick;           /**< current tick-within-beat */
+  double    bar_start_tick; /**< number of ticks that have elapsed between frame 0 and the first beat of the current measure. */
 };
 
 /* jack connection */
