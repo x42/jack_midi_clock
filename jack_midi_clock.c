@@ -385,7 +385,7 @@ static int init_jack(const char *client_name) {
 
 static int jack_portsetup(void) {
   if ((mclk_output_port = jack_port_register(j_client, "mclk_out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0)) == 0) {
-    fprintf (stderr, "cannot register mclk ouput port !\n");
+    fprintf (stderr, "cannot register mclk output port !\n");
     return (-1);
   }
   return (0);
