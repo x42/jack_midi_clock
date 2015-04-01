@@ -63,6 +63,8 @@ static volatile enum {
   Run,
   Exit
 } client_state = Init;
+static int wake_main_read = -1;
+static int wake_main_write = -1;
 
 /* commandline options */
 static double   user_bpm   = 0.0;
@@ -79,6 +81,51 @@ static double   resync_delay = 2.0; /**< seconds between 'pos' and 'continue' me
 #define MIDI_RT_CONTINUE (0xFB)
 #define MIDI_RT_STOP     (0xFC)
 
+
+static void wake_main_init(void)
+{
+#ifndef WIN32
+  int pipefd[2] = {-1, -1};
+  if (pipe(pipefd) == -1) {
+    fprintf(stderr, "Warning: unable to create pipe for signaling main thread.\n");
+    return;
+  }
+  wake_main_read = pipefd[0];
+  wake_main_write = pipefd[1];
+#endif
+}
+
+/**
+ * Wake the main thread (for shutdown)
+ * Call this function when the main application needs to shut down.
+ */
+static void wake_main_now(void)
+{
+#ifndef WIN32
+  char c = 0;
+  write(wake_main_write, &c, sizeof(c));
+#endif
+}
+
+/**
+ * Wait for wake signal
+ * This blocks until either a signal is received or a wake
+ * message is received on the pipe.
+ */
+static void wake_main_wait(void)
+{
+#ifndef WIN32
+  if (wake_main_read != -1) {
+	  char c = 0;
+	  read(wake_main_read, &c, sizeof(c));
+  } else {
+    /* fall back on using sleep if pipe fd is invalid */
+    sleep(1);
+  }
+#else
+  sleep(1);
+#endif
+}
 
 /**
  * cleanup and exit
@@ -352,6 +399,7 @@ static int process (jack_nframes_t nframes, void *arg) {
 static void jack_shutdown (void *arg) {
   fprintf(stderr, "recv. shutdown request from jackd.\n");
   client_state = Exit;
+  wake_main_now();
 }
 
 /**
@@ -402,6 +450,7 @@ static void catchsig (int sig) {
   signal(SIGHUP, catchsig);
 #endif
   client_state = Exit;
+  wake_main_now();
 }
 
 /**************************
@@ -557,13 +606,14 @@ int main (int argc, char **argv) {
   signal (SIGINT, catchsig);
 #endif
 
+  wake_main_init();
 
   /* all systems go.
    * processs() does the work in jack realtime context
    */
   client_state = Run;
   while (client_state != Exit) {
-    sleep (1);
+    wake_main_wait();
   }
 
 out:
