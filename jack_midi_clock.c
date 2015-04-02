@@ -347,13 +347,18 @@ static int process (jack_nframes_t nframes, void *arg) {
     return 0; /* no tempo known */
   }
 
-  /* quarter-notes per beat is [usually] independent of the meter:
+  /* Do not do this:
    *
-   * certainly for 2/4, 3/4, 4/4 etc.
-   * should be true as well for 6/8, 2/2
-   * TODO x-check w/jack-timecode-master implementations
+   *     quarter_notes_per_beat = xpos.beat_type / 4.0;
    *
-   * quarter_notes_per_beat = xpos.beat_type / 4.0; // ?!
+   * Even though the tempo is reported as "beats per minute," they
+   * actually mean "quarter notes per minute." Therefore, this should
+   * always be 1.0. The quarter-notes-per-minute appears to be the
+   * industry convention... but occasionally trips up the math-minded
+   * literalists like myself.
+   *
+   * Viz. https://community.ardour.org/node/1433
+   *      http://www.steinberg.net/forums/viewtopic.php?t=56065
    */
   const double quarter_notes_per_beat = 1.0;
 
