@@ -69,6 +69,7 @@ static int wake_main_write = -1;
 /* commandline options */
 static double   user_bpm   = 0.0;
 static short    force_bpm  = 0;
+static short    tempo_is_qnpm = 1;  /** tempo is quarter notes per minute instead of BPM */
 static short    msg_filter = 0;     /** bitwise flags, MSG_NO_.. */
 static double   resync_delay = 2.0; /**< seconds between 'pos' and 'continue' message */
 
@@ -347,20 +348,18 @@ static int process (jack_nframes_t nframes, void *arg) {
     return 0; /* no tempo known */
   }
 
-  /* Do not do this:
-   *
-   *     quarter_notes_per_beat = xpos.beat_type / 4.0;
-   *
-   * Even though the tempo is reported as "beats per minute," they
-   * actually mean "quarter notes per minute." Therefore, this should
-   * always be 1.0. The quarter-notes-per-minute appears to be the
-   * industry convention... but occasionally trips up the math-minded
-   * literalists like myself.
+  /* It is an industry convention that tempo, while reported as "beats
+   * per minute" is actually "quarter notes per minute" in many DAW's.
+   * However, some DAW's/musicians actually use beats per minute
+   * (using the definition of "beat" as the denomitor of the time
+   * signature). While it appears that the JACK transport's intent
+   * is the latter, it's totally up to the DAW to define the tempo/note
+   * relationship. Currently Ardour does "quarter notes per minute."
    *
    * Viz. https://community.ardour.org/node/1433
    *      http://www.steinberg.net/forums/viewtopic.php?t=56065
    */
-  const double quarter_notes_per_beat = 1.0;
+  const double quarter_notes_per_beat = (tempo_is_qnpm) ? 1.0 : (xpos.beat_type / 4.0);
 
   /* MIDI Beat Clock: Send 24 ticks per quarter note  */
   const double samples_per_quarter_note = samples_per_beat / quarter_notes_per_beat;
@@ -470,6 +469,7 @@ static struct option const long_options[] =
   {"help", no_argument, 0, 'h'},
   {"no-position", no_argument, 0, 'P'},
   {"no-transport", no_argument, 0, 'T'},
+  {"strict-bpm", no_argument, 0, 's'},
   {"version", no_argument, 0, 'V'},
   {NULL, 0, NULL, 0}
 };
@@ -486,6 +486,8 @@ static void usage (int status) {
 "                         seconds between 'song-position' and 'continue' message\n"
 "  -P, --no-position      do not send song-position (0xf2) messages\n"
 "  -T, --no-transport     do not send start/stop/continue messages\n"
+"  -s, --strict-bpm       interpret tempo strictly as beats per minute (default\n"
+"                         is quarter-notes per minute)\n"
 "  -h, --help             display this help and exit\n"
 "  -V, --version          print version information and exit\n"
 
@@ -539,6 +541,7 @@ static int decode_switches (int argc, char **argv) {
 			   "h"	/* help */
 			   "P"	/* no-position */
 			   "T"	/* no-transport */
+			   "s"  /* strict-bpm */
 			   "V",	/* version */
 			   long_options, (int *) 0)) != EOF)
     {
@@ -566,6 +569,10 @@ static int decode_switches (int argc, char **argv) {
 	case 'T':
 	  msg_filter |= MSG_NO_TRANSPORT;
 	  break;
+
+        case 's':
+          tempo_is_qnpm = 0;
+          break;
 
 	case 'V':
 	  printf ("jack_midi_clock version %s\n\n", VERSION);
