@@ -14,6 +14,7 @@ endif
 
 ###############################################################################
 
+override CFLAGS += -DWITH_JITTER
 override CFLAGS += -DVERSION="\"$(VERSION)\""
 override CFLAGS += `pkg-config --cflags jack`
 LOADLIBES = `pkg-config --cflags --libs jack` -lm -lpthread

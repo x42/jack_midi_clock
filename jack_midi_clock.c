@@ -70,6 +70,25 @@ static short    force_bpm  = 0;
 static short    msg_filter = 0;     /** bitwise flags, MSG_NO_.. */
 static double   resync_delay = 2.0; /**< seconds between 'pos' and 'continue' message */
 
+#ifdef WITH_JITTER
+static double   jitter_level = 0.0;
+static double   jitter_rand = 0.0;
+static uint32_t _rseed = 1;
+
+static float randf() {
+        // 31bit Park-Miller-Carta Pseudo-Random Number Generator
+        uint32_t hi, lo;
+        lo = 16807 * (_rseed & 0xffff);
+        hi = 16807 * (_rseed >> 16);
+
+        lo += (hi & 0x7fff) << 16;
+        lo += hi >> 15;
+        lo = (lo & 0x7fffffff) + (lo >> 31);
+        return (_rseed = lo) / 1073741824.f - 1.f;
+}
+
+#endif
+
 /* MIDI System Real-Time Messages
  * https://en.wikipedia.org/wiki/MIDI_beat_clock
  * http://www.midi.org/techspecs/midimessages.php
@@ -317,7 +336,11 @@ static int process (jack_nframes_t nframes, void *arg) {
 
   /* send clock ticks for this cycle */
   while(1) {
+#ifdef WITH_JITTER
+    const double next_tick = mclk_last_tick + clock_tick_interval + jitter_rand;
+#else
     const double next_tick = mclk_last_tick + clock_tick_interval;
+#endif
     const int64_t next_tick_offset = llrint(next_tick) - xpos.frame - bbt_offset;
     if (next_tick_offset >= nframes) break;
 
@@ -338,6 +361,12 @@ static int process (jack_nframes_t nframes, void *arg) {
       /* enqueue clock tick */
       send_rt_message(port_buf, next_tick_offset, MIDI_RT_CLOCK);
     }
+
+#ifdef WITH_JITTER
+    if (jitter_level > 0) {
+	    jitter_rand = randf() * jitter_level * clock_tick_interval;
+    }
+#endif
 
     mclk_last_tick = next_tick;
     ticks_sent_this_cycle++;
@@ -413,6 +442,7 @@ static struct option const long_options[] =
   {"bpm", required_argument, 0, 'b'},
   {"force-bpm", no_argument, 0, 'B'},
   {"resync-delay", required_argument, 0, 'd'},
+  {"jitter-level", required_argument, 0, 'J'},
   {"help", no_argument, 0, 'h'},
   {"no-position", no_argument, 0, 'P'},
   {"no-transport", no_argument, 0, 'T'},
@@ -430,6 +460,9 @@ static void usage (int status) {
 "  -B, --force-bpm        ignore jack timecode master\n"
 "  -d <sec>, --resync-delay <sec>\n"
 "                         seconds between 'song-position' and 'continue' message\n"
+"  -J, --jitter-level <percent>\n"
+"                         add artificial jitter to the signal 0..20%%\n"
+"                         default: off (0)\n"
 "  -P, --no-position      do not send song-position (0xf2) messages\n"
 "  -T, --no-transport     do not send start/stop/continue messages\n"
 "  -h, --help             display this help and exit\n"
@@ -482,6 +515,7 @@ static int decode_switches (int argc, char **argv) {
 			   "b:"	/* bpm */
 			   "B"	/* force-bpm */
 			   "d:"	/* resync-delay */
+			   "J:"	/* jittery output */
 			   "h"	/* help */
 			   "P"	/* no-position */
 			   "T"	/* no-transport */
@@ -507,6 +541,18 @@ static int decode_switches (int argc, char **argv) {
 	    fprintf(stderr, "Invalid resync-delay, should be 0 <= dly <= 20.0. Using 2.0sec.\n");
 	    resync_delay = 2.0;
 	  }
+	  break;
+
+	case 'J':
+#ifdef WITH_JITTER
+	  jitter_level = atof(optarg) / 100.f;
+	  if (jitter_level < 0.f || jitter_level > 0.2f) {
+	    fprintf(stderr, "Invalid jiter-level, should be 0 <= dly <= 20.%%.\n");
+	    jitter_level = 0;
+	  }
+#else
+	  fprintf(stderr, "This version was compiled without support for jitter.\n");
+#endif
 	  break;
 
 	case 'T':
@@ -557,6 +603,10 @@ int main (int argc, char **argv) {
   signal (SIGINT, catchsig);
 #endif
 
+#ifdef WITH_JITTER
+   _rseed =  jack_get_time (j_client);
+   if (_rseed == 0) _rseed = 1;
+#endif
 
   /* all systems go.
    * processs() does the work in jack realtime context
