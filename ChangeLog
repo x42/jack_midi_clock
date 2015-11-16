@@ -1,3 +1,9 @@
+2015-11-16 (0.4.2)  Robin Gareus <robin@gareus.org>
+* wake main thread with pipe msg instead of sleep(1) polling
+* add --strict-bpm option for tempo interpretation
+* add jitter option (instrumentation tool for testing)
+* code review & documentation 
+
 2013-05-27 (0.4.1)  Robin Gareus <robin@gareus.org>
 * remove reference to [packed] jack_double 
 
