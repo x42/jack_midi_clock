@@ -63,10 +63,13 @@ static volatile enum {
   Run,
   Exit
 } client_state = Init;
+static int wake_main_read = -1;
+static int wake_main_write = -1;
 
 /* commandline options */
 static double   user_bpm   = 0.0;
 static short    force_bpm  = 0;
+static short    tempo_is_qnpm = 1;  /** tempo is quarter notes per minute instead of BPM */
 static short    msg_filter = 0;     /** bitwise flags, MSG_NO_.. */
 static double   resync_delay = 2.0; /**< seconds between 'pos' and 'continue' message */
 
@@ -98,6 +101,51 @@ static float randf() {
 #define MIDI_RT_CONTINUE (0xFB)
 #define MIDI_RT_STOP     (0xFC)
 
+
+static void wake_main_init(void)
+{
+#ifndef WIN32
+  int pipefd[2] = {-1, -1};
+  if (pipe(pipefd) == -1) {
+    fprintf(stderr, "Warning: unable to create pipe for signaling main thread.\n");
+    return;
+  }
+  wake_main_read = pipefd[0];
+  wake_main_write = pipefd[1];
+#endif
+}
+
+/**
+ * Wake the main thread (for shutdown)
+ * Call this function when the main application needs to shut down.
+ */
+static void wake_main_now(void)
+{
+#ifndef WIN32
+  char c = 0;
+  write(wake_main_write, &c, sizeof(c));
+#endif
+}
+
+/**
+ * Wait for wake signal
+ * This blocks until either a signal is received or a wake
+ * message is received on the pipe.
+ */
+static void wake_main_wait(void)
+{
+#ifndef WIN32
+  if (wake_main_read != -1) {
+	  char c = 0;
+	  read(wake_main_read, &c, sizeof(c));
+  } else {
+    /* fall back on using sleep if pipe fd is invalid */
+    sleep(1);
+  }
+#else
+  sleep(1);
+#endif
+}
 
 /**
  * cleanup and exit
@@ -319,15 +367,18 @@ static int process (jack_nframes_t nframes, void *arg) {
     return 0; /* no tempo known */
   }
 
-  /* quarter-notes per beat is [usually] independent of the meter:
+  /* It is an industry convention that tempo, while reported as "beats
+   * per minute" is actually "quarter notes per minute" in many DAW's.
+   * However, some DAW's/musicians actually use beats per minute
+   * (using the definition of "beat" as the denomitor of the time
+   * signature). While it appears that the JACK transport's intent
+   * is the latter, it's totally up to the DAW to define the tempo/note
+   * relationship. Currently Ardour does "quarter notes per minute."
    *
-   * certainly for 2/4, 3/4, 4/4 etc.
-   * should be true as well for 6/8, 2/2
-   * TODO x-check w/jack-timecode-master implementations
-   *
-   * quarter_notes_per_beat = xpos.beat_type / 4.0; // ?!
+   * Viz. https://community.ardour.org/node/1433
+   *      http://www.steinberg.net/forums/viewtopic.php?t=56065
    */
-  const double quarter_notes_per_beat = 1.0;
+  const double quarter_notes_per_beat = (tempo_is_qnpm) ? 1.0 : (xpos.beat_type / 4.0);
 
   /* MIDI Beat Clock: Send 24 ticks per quarter note  */
   const double samples_per_quarter_note = samples_per_beat / quarter_notes_per_beat;
@@ -381,6 +432,7 @@ static int process (jack_nframes_t nframes, void *arg) {
 static void jack_shutdown (void *arg) {
   fprintf(stderr, "recv. shutdown request from jackd.\n");
   client_state = Exit;
+  wake_main_now();
 }
 
 /**
@@ -431,6 +483,7 @@ static void catchsig (int sig) {
   signal(SIGHUP, catchsig);
 #endif
   client_state = Exit;
+  wake_main_now();
 }
 
 /**************************
@@ -446,6 +499,7 @@ static struct option const long_options[] =
   {"help", no_argument, 0, 'h'},
   {"no-position", no_argument, 0, 'P'},
   {"no-transport", no_argument, 0, 'T'},
+  {"strict-bpm", no_argument, 0, 's'},
   {"version", no_argument, 0, 'V'},
   {NULL, 0, NULL, 0}
 };
@@ -465,6 +519,8 @@ static void usage (int status) {
 "                         default: off (0)\n"
 "  -P, --no-position      do not send song-position (0xf2) messages\n"
 "  -T, --no-transport     do not send start/stop/continue messages\n"
+"  -s, --strict-bpm       interpret tempo strictly as beats per minute (default\n"
+"                         is quarter-notes per minute)\n"
 "  -h, --help             display this help and exit\n"
 "  -V, --version          print version information and exit\n"
 
@@ -519,6 +575,7 @@ static int decode_switches (int argc, char **argv) {
 			   "h"	/* help */
 			   "P"	/* no-position */
 			   "T"	/* no-transport */
+			   "s"  /* strict-bpm */
 			   "V",	/* version */
 			   long_options, (int *) 0)) != EOF)
     {
@@ -558,6 +615,10 @@ static int decode_switches (int argc, char **argv) {
 	case 'T':
 	  msg_filter |= MSG_NO_TRANSPORT;
 	  break;
+
+        case 's':
+          tempo_is_qnpm = 0;
+          break;
 
 	case 'V':
 	  printf ("jack_midi_clock version %s\n\n", VERSION);
@@ -603,17 +664,20 @@ int main (int argc, char **argv) {
   signal (SIGINT, catchsig);
 #endif
 
+
 #ifdef WITH_JITTER
    _rseed =  jack_get_time (j_client);
    if (_rseed == 0) _rseed = 1;
 #endif
+
+  wake_main_init();
 
   /* all systems go.
    * processs() does the work in jack realtime context
    */
   client_state = Run;
   while (client_state != Exit) {
-    sleep (1);
+    wake_main_wait();
   }
 
 out:

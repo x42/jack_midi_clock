@@ -241,7 +241,7 @@ static double run_dll(DelayLockedLoop *dll, double tme) {
   return (dll->t1 - dll->t0);
 }
 
-const const char *msg_to_string(uint8_t msg) {
+const char *msg_to_string(uint8_t msg) {
   switch(msg) {
     case 0xf8: return "clk";
     case 0xfa: return "start";
@@ -350,6 +350,9 @@ static void print_time_event(struct appstate *s, timenfo *t) {
 }
 
 
+/* TODO: it's not safe to call pthread_cond_signal from a signal handler
+ * See http://pubs.opengroup.org/onlinepubs/009695399/functions/pthread_cond_broadcast.html
+ */
 static void wearedone(int sig) {
   fprintf(stderr,"caught signal - shutting down.\n");
   run=0;
