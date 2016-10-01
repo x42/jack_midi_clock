@@ -666,7 +666,7 @@ int main (int argc, char **argv) {
 
 
 #ifdef WITH_JITTER
-   _rseed =  jack_get_time (j_client);
+   _rseed =  jack_get_time ();
    if (_rseed == 0) _rseed = 1;
 #endif
 
