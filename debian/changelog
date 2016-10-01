@@ -1,7 +1,7 @@
-jack-midi-clock (0.4.2-0.1) unstable; urgency=medium
+jack-midi-clock (0.4.3-0.1) unstable; urgency=medium
 
   * locally created custom package for upstream testing -- NMU
   * see upstream ChangeLog
   * https://github.com/x42/jack_midi_clock/commits/master
 
- -- Robin Gareus <rgareus@priroda>  Mon, 16 Nov 2015 17:37:17 +0100
+ -- Robin Gareus <robin@gareus.org>  Sat, 01 Oct 2016 23:09:52 +0200

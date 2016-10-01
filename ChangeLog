@@ -1,3 +1,7 @@
+2016-10-01 (0.4.3)  Robin Gareus <robin@gareus.org>
+* fix JACK API usage (jack_get_time)
+* ignore compiler warning -Wunused-result
+
 2015-11-16 (0.4.2)  Robin Gareus <robin@gareus.org>
 * wake main thread with pipe msg instead of sleep(1) polling
 * add --strict-bpm option for tempo interpretation
