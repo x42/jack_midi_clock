@@ -123,7 +123,7 @@ static void wake_main_now(void)
 {
 #ifndef WIN32
   char c = 0;
-  write(wake_main_write, &c, sizeof(c));
+  (void) write(wake_main_write, &c, sizeof(c));
 #endif
 }
 
@@ -137,7 +137,7 @@ static void wake_main_wait(void)
 #ifndef WIN32
   if (wake_main_read != -1) {
 	  char c = 0;
-	  read(wake_main_read, &c, sizeof(c));
+	  (void) read(wake_main_read, &c, sizeof(c));
   } else {
     /* fall back on using sleep if pipe fd is invalid */
     sleep(1);
