@@ -685,4 +685,41 @@ out:
   return(0);
 }
 
+__attribute__ ((visibility("default")))
+int jack_initialize(jack_client_t* client, const char* load_init);
+
+int jack_initialize(jack_client_t* client, const char* load_init) {
+  memset(&last_xpos, 0, sizeof(struct bbtpos));
+
+  // TODO parse load_init
+
+  j_client = client;
+  jack_set_process_callback (client, process, 0);
+
+  if (jack_portsetup())
+    return(1);
+
+  if (jack_activate (j_client)) {
+    fprintf (stderr, "cannot activate client.\n");
+    return(1);
+  }
+
+#ifdef WITH_JITTER
+   _rseed =  jack_get_time ();
+   if (_rseed == 0) _rseed = 1;
+#endif
+
+  client_state = Run;
+
+  return(0);
+}
+
+__attribute__ ((visibility("default")))
+void jack_finish(void* arg);
+
+void jack_finish(void* arg) {
+  client_state = Exit;
+  j_client = NULL;
+}
+
 /* vi:set ts=8 sts=2 sw=2: */
