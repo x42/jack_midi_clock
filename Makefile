@@ -30,7 +30,7 @@ jack_midi_clock: jack_midi_clock.c
 jack_mclk_dump: jack_mclk_dump.c
 
 jack_midi_clock.so: jack_midi_clock.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $< $(LDFLAGS) $(LOADLIBES) -shared -fPIC -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DJACK_INTERNAL_CLIENT $< $(LDFLAGS) $(LOADLIBES) -shared -fPIC -o $@
 
 install-bin: jack_midi_clock jack_mclk_dump jack_midi_clock.so
 	install -d $(DESTDIR)$(bindir)

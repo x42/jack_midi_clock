@@ -63,8 +63,11 @@ static volatile enum {
   Run,
   Exit
 } client_state = Init;
+
+#ifndef JACK_INTERNAL_CLIENT
 static int wake_main_read = -1;
 static int wake_main_write = -1;
+#endif
 
 /* commandline options */
 static double   user_bpm   = 0.0;
@@ -102,6 +105,7 @@ static float randf() {
 #define MIDI_RT_STOP     (0xFC)
 
 
+#ifndef JACK_INTERNAL_CLIENT
 static void wake_main_init(void)
 {
 #ifndef WIN32
@@ -157,6 +161,8 @@ static void cleanup(int sig) {
     j_client = NULL;
   }
 }
+
+#endif // JACK_INTERNAL_CLIENT
 
 /**
  * compare two BBT positions
@@ -426,6 +432,7 @@ static int process (jack_nframes_t nframes, void *arg) {
   return 0;
 }
 
+#ifndef JACK_INTERNAL_CLIENT
 /**
  * callback if jack server terminates
  */
@@ -463,6 +470,7 @@ static int init_jack(const char *client_name) {
 
   return (0);
 }
+#endif // JACK_INTERNAL_CLIENT
 
 static int jack_portsetup(void) {
   if ((mclk_output_port = jack_port_register(j_client, "mclk_out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0)) == 0) {
@@ -472,6 +480,7 @@ static int jack_portsetup(void) {
   return (0);
 }
 
+#ifndef JACK_INTERNAL_CLIENT
 static void port_connect(char *mclk_port) {
   if (mclk_port && jack_connect(j_client, jack_port_name(mclk_output_port), mclk_port)) {
     fprintf(stderr, "cannot connect port %s to %s\n", jack_port_name(mclk_output_port), mclk_port);
@@ -685,6 +694,8 @@ out:
   return(0);
 }
 
+#else
+
 __attribute__ ((visibility("default")))
 int jack_initialize(jack_client_t* client, const char* load_init);
 
@@ -721,5 +732,7 @@ void jack_finish(void* arg) {
   client_state = Exit;
   j_client = NULL;
 }
+
+#endif // JACK_INTERNAL_CLIENT
 
 /* vi:set ts=8 sts=2 sw=2: */
