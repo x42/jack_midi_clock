@@ -16,7 +16,7 @@ Installation
 ------------
 
 ```bash
- git clone git://github.com/x42/jack_midi_clock.git
+ git clone https://github.com/x42/jack_midi_clock.git
  cd jack_midi_clock
  make
  sudo make install
